@@ -1,0 +1,28 @@
+/* 色と文字の変数。1c スコアボード案の詳しい値は T-04 で決める。 */
+:root {
+  --navy: #0a0e2e;
+  --bg: #f5f6fa;
+  --ink: #171b30;
+  --mute: #5d6380;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1122;
+    --ink: #e9ecf6;
+    --mute: #9ba2c0;
+    color-scheme: dark;
+  }
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+}
+.placeholder {
+  padding: 24px 16px;
+}
+.placeholder p {
+  color: var(--mute);
+}
