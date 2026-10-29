@@ -7,7 +7,9 @@ import type {
 } from '../../contracts/index.ts'
 import { setWinner } from '../../lib/rally/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_OPP_PLAYERS, DEMO_PLAYERS, DEMO_SETS } from './demo.ts'
+import { describe, entriesOf, idsToRemove, renumberPoints, type Entry } from './history.ts'
 import ReceptionPanel from './ReceptionPanel.tsx'
+import RecordList from './RecordList.tsx'
 import ScoreButton from './ScoreButton.tsx'
 import {
   autoPoint,
@@ -34,6 +36,9 @@ export default function RecordScreen({ repo, pending }: Props) {
   const [setIndex, setSetIndex] = useState(0)
   const [sets, setSets] = useState<SetRecords[]>([])
   const [override, setOverride] = useState<ServingOverride | null>(null)
+  const [showList, setShowList] = useState(false)
+  /** 取消・削除のたびに増やし、入力欄の「直前の1本」を消す */
+  const [resetKey, setResetKey] = useState(0)
 
   useEffect(() => repo.subscribe(DEMO_MATCH.id, setSets), [repo])
 
@@ -58,12 +63,29 @@ export default function RecordScreen({ repo, pending }: Props) {
     void repo.save(makePoint(state, side, 'manual', null, { ...now(), setId: set.id }))
   }
 
+  /** 記録を消し、残りの得点の「そのあとの得点」を付け直す */
+  const removeIds = (ids: readonly string[]) => {
+    for (const id of ids) void repo.remove(id)
+    const rest = points.filter((p) => !ids.includes(p.clientId))
+    for (const p of renumberPoints(rest)) void repo.save(p)
+  }
+
   const minus = (side: Side) => {
     const pt = lastPointOf(points, side)
     if (!pt) return
     // −1 ではサーブ権を変えない
     setOverride({ serving: state.serving, atPoints: points.length - 1 })
-    void repo.remove(pt.clientId)
+    removeIds([pt.clientId])
+  }
+
+  const entries = entriesOf(records)
+  const lastEntry = entries.at(-1) ?? null
+
+  /** 1本（または手動の得点）を消す。その1本の得点も消えて、サーブ権は残りの得点から決まる */
+  const removeEntry = (entry: Entry) => {
+    removeIds(idsToRemove(entry, points))
+    setOverride(null)
+    setResetKey((k) => k + 1)
   }
 
   const switchServing = (side: Side) => setOverride({ serving: side, atPoints: points.length })
@@ -143,9 +165,18 @@ export default function RecordScreen({ repo, pending }: Props) {
         <p className="rally-hint">ラリー中：得点したチームの数字をタップ</p>
       )}
 
-      {state.serving === 'us' ? (
+      {showList ? (
+        <RecordList
+          entries={entries}
+          players={DEMO_PLAYERS}
+          oppPlayers={DEMO_OPP_PLAYERS}
+          onRemove={removeEntry}
+          onEdit={(e) => void repo.save(e)}
+          onClose={() => setShowList(false)}
+        />
+      ) : state.serving === 'us' ? (
         <ServePanel
-          key={set.id}
+          key={`${set.id}-${resetKey}`}
           setId={set.id}
           players={DEMO_PLAYERS}
           oppPlayers={DEMO_OPP_PLAYERS}
@@ -153,13 +184,35 @@ export default function RecordScreen({ repo, pending }: Props) {
         />
       ) : (
         <ReceptionPanel
-          key={set.id}
+          key={`${set.id}-${resetKey}`}
           setId={set.id}
           players={DEMO_PLAYERS}
           oppPlayers={DEMO_OPP_PLAYERS}
           onSave={savePlay}
         />
       )}
+
+      <footer className="record-foot">
+        <span className="num last-entry">
+          {lastEntry ? describe(lastEntry, DEMO_PLAYERS, DEMO_OPP_PLAYERS) : '—'}
+        </span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          disabled={!lastEntry}
+          onClick={() => lastEntry && removeEntry(lastEntry)}
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          className="btn btn-sm"
+          aria-pressed={showList}
+          onClick={() => setShowList((v) => !v)}
+        >
+          一覧
+        </button>
+      </footer>
     </section>
   )
 }
