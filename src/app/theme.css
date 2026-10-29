@@ -110,6 +110,21 @@ button {
   color: var(--on-navy);
 }
 
+/* 上部のお知らせ（更新・インストールの案内） */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: var(--border);
+  background: var(--surface);
+  font-size: 14px;
+}
+.banner span {
+  flex: 1 1 180px;
+}
+
 .placeholder {
   padding: 24px 16px;
 }
