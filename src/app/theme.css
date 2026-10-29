@@ -1,25 +1,115 @@
-/* 色と文字の変数。1c スコアボード案の詳しい値は T-04 で決める。 */
+/* 色と文字の変数。1c スコアボード案（要件定義書 6 章「デザインの方向性」）。
+   角を立て、枠線をはっきり引き、選択中だけ紺で塗る。 */
 :root {
   --navy: #0a0e2e;
+  --on-navy: #ffffff;
   --bg: #f5f6fa;
+  --surface: #ffffff;
   --ink: #171b30;
   --mute: #5d6380;
+  --line: #171b30;
+  --line-soft: #c9cddc;
+  --good: #1f7a4d;
+  --bad: #c0392b;
+  --font: system-ui, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --border: 2px solid var(--line);
+  --tabbar-h: 56px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
+    /* ダークでは紺が背景に沈むので、選択中は明るい色で反転させる */
+    --navy: #e9ecf6;
+    --on-navy: #0a0e2e;
     --bg: #0e1122;
+    --surface: #171b30;
     --ink: #e9ecf6;
     --mute: #9ba2c0;
+    --line: #e9ecf6;
+    --line-soft: #3a4060;
+    --good: #4cc38a;
+    --bad: #ff6b5b;
     color-scheme: dark;
   }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: system-ui, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
 }
+button {
+  font: inherit;
+  color: inherit;
+}
+
+/* 等幅の大きな数字（得点など） */
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 枠線つきのボタン。選択中は aria-pressed か aria-current で紺に塗る */
+.btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border: var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  cursor: pointer;
+}
+.btn[aria-pressed='true'] {
+  background: var(--navy);
+  color: var(--on-navy);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 画面の骨組み：中身はスクロール、タブバーは下に固定 */
+.app {
+  min-height: 100dvh;
+  padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+}
+.app-main {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.tabbar {
+  position: fixed;
+  inset: auto 0 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  border-top: var(--border);
+  background: var(--surface);
+}
+.tabbar-item {
+  border: 0;
+  border-right: 1px solid var(--line-soft);
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tabbar-item:last-child {
+  border-right: 0;
+}
+.tabbar-item[aria-current='page'] {
+  background: var(--navy);
+  color: var(--on-navy);
+}
+
 .placeholder {
   padding: 24px 16px;
 }
