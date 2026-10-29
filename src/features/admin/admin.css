@@ -1,0 +1,128 @@
+/* 管理画面。色と .btn は app/theme.css（T-04）を使う。T-04 が入るまでは var() の2つ目の値を使う。 */
+.admin {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
+}
+.admin h1 {
+  margin: 0 0 8px;
+  font-size: 1.4rem;
+}
+.admin-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: var(--border, 2px solid currentColor);
+}
+.admin-section h2 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+.admin-mute {
+  color: var(--mute);
+}
+.admin-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--bad, #c62828);
+}
+.admin-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.admin-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft, var(--mute));
+}
+.admin-list li.admin-col {
+  flex-direction: column;
+  align-items: stretch;
+}
+.admin-list small {
+  display: block;
+  color: var(--mute);
+}
+.admin-grow {
+  flex: 1;
+  min-width: 0;
+}
+.admin-number {
+  width: 2.5em;
+  font-size: 1.3rem;
+  font-weight: bold;
+  text-align: right;
+}
+.admin-retired {
+  opacity: 0.5;
+}
+.admin-row-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+}
+.admin-sub {
+  padding: 4px 0 4px 12px;
+}
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.admin-form h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.admin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-form fieldset {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.admin-form legend {
+  margin-bottom: 4px;
+}
+.admin-form .admin-check {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.admin input:not([type='checkbox']),
+.admin select {
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 1rem; /* 16px 未満だと iPhone が拡大する */
+  border: var(--border, 2px solid currentColor);
+  border-radius: 0;
+  background: var(--surface, var(--bg));
+  color: var(--ink);
+}
+.admin-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.admin-actions,
+.admin-inline {
+  display: flex;
+  gap: 8px;
+}
+.admin-inline input {
+  flex: 1;
+  min-width: 0;
+}
+.admin .admin-primary {
+  background: var(--navy);
+  color: var(--on-navy, #fff);
+  font-weight: bold;
+}
