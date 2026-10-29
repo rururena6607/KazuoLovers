@@ -3,7 +3,9 @@ import { renderToString } from 'react-dom/server'
 import App from './App.tsx'
 
 describe('App', () => {
-  it('雛形のページが描画できる', () => {
-    expect(renderToString(<App />)).toContain('サーブレシーブ記録')
+  it('最初は記録のタブを開き、タブバーを出す', () => {
+    const html = renderToString(<App />)
+    expect(html).toContain('class="tabbar"')
+    expect(html).toContain('<h1>記録</h1>')
   })
 })
