@@ -8,7 +8,13 @@ import type {
   ServeRecord,
   ServeResult,
 } from '../../contracts/index.ts'
-import { attackStatsOf, receptionStatsOf, serveStatsOf } from './metrics.ts'
+import {
+  attackStatsOf,
+  breakRateOf,
+  excellentRateOf,
+  receptionStatsOf,
+  serveStatsOf,
+} from './metrics.ts'
 
 const serve = (result: ServeResult, reception: Grade | null = null): ServeRecord => ({
   kind: 'serve',
@@ -172,5 +178,41 @@ describe('attackStatsOf（JVA 記録票）', () => {
     const stats = attackStatsOf([])
     expect(stats.killRate).toBeNull()
     expect(stats.efficiency).toBeNull()
+  })
+})
+
+describe('補助指標（要件定義書 5 章）', () => {
+  it('崩し率 =（エース＋C＋D）÷ 打数', () => {
+    const serves = [
+      serve('ace'),
+      serve('in', 'C'),
+      serve('in', 'D'),
+      serve('in', 'A'),
+      serve('in', 'B'),
+      serve('miss'),
+      serve('in', 'A'),
+      serve('in', 'B'),
+    ]
+    expect(breakRateOf(serves)).toBe(37.5)
+    expect(breakRateOf([])).toBeNull()
+  })
+
+  it('A返球率 = A ÷ 受数。相手ミスは受数に入れない', () => {
+    expect(excellentRateOf(['A', 'A', 'B', 'ace', 'opp_miss'])).toBe(50)
+    expect(excellentRateOf(['opp_miss'])).toBeNull()
+  })
+})
+
+describe('練習のサーブを混ぜたとき（前提の確認）', () => {
+  it('評価がないインは打数に入るので、試合のサーブだけを渡す前提になる', () => {
+    const match = [
+      serve('ace'),
+      ...repeat(3, () => serve('in', 'C')),
+      ...repeat(2, () => serve('miss')),
+      ...repeat(4, () => serve('in', 'B')),
+    ]
+    const withPractice = [...match, ...repeat(10, () => serve('in', null))]
+    expect(serveStatsOf(match).efficiency).toBe(12.5)
+    expect(serveStatsOf(withPractice).efficiency).toBe(6.25)
   })
 })
