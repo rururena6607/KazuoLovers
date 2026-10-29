@@ -8,7 +8,7 @@ import type {
   SetRecords,
 } from '../../contracts/index.ts'
 import { zoneOf } from '../../lib/court/index.ts'
-import { MISS_TYPES } from './labels.ts'
+import { ATTACK_RESULTS, MISS_TYPES } from './labels.ts'
 
 /** 一覧の1行：サーブ・レシーブ・アタックと、手動の得点（数字のタップ） */
 export type Entry = PlayRecord | PointRecord
@@ -54,8 +54,6 @@ export function withGrade(entry: Entry, grade: Grade): Entry {
   return entry
 }
 
-const ATTACK_RESULT = { kill: '決定', continue: '継続', error: 'ミス', blocked: '被ブロック' } as const
-
 /**
  * 画面の下に出す1行（要件定義書 6 章の例：`#7 → #12 C · Z1`）。
  * サーブは「サーバー → 受けた相手 結果 · 着弾ゾーン」、レシーブは「相手サーバー → レシーバー 結果」。
@@ -97,7 +95,11 @@ export function describe(
       return join(head, entry.result === 'ace' ? '被エース' : entry.result, zone !== null ? `· Z${zone}` : null)
     }
     case 'attack':
-      return join(own(entry.attackerId), 'アタック', ATTACK_RESULT[entry.result])
+      return join(
+        own(entry.attackerId),
+        entry.isBack ? 'バックアタック' : 'アタック',
+        ATTACK_RESULTS.find((r) => r.value === entry.result)?.label ?? null,
+      )
     case 'point':
       return `+1 ${entry.side === 'us' ? '自チーム' : '相手'}（${entry.ourScore}-${entry.oppScore}）`
   }
