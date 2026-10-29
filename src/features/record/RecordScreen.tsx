@@ -25,6 +25,8 @@ import { useMatchRecords } from './useMatchRecords.ts'
 
 interface Props {
   repo: RecordRepository
+  /** 練習モード（F-10）に切り替える */
+  onPractice: () => void
 }
 
 const hasRecords = (r: SetRecords | undefined): boolean =>
@@ -38,7 +40,7 @@ const panelOf = (rec: PlayRecord): Side | null =>
 const canAttach = (rec: PlayRecord): boolean =>
   rec.kind === 'reception' || (rec.kind === 'serve' && rec.result === 'in')
 
-export default function RecordScreen({ repo }: Props) {
+export default function RecordScreen({ repo, onPractice }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const onError = useCallback((e: unknown) => {
     console.error(e)
@@ -170,6 +172,9 @@ export default function RecordScreen({ repo }: Props) {
             </button>
           </span>
         )}
+        <button type="button" className="btn btn-sm" onClick={onPractice}>
+          練習モード
+        </button>
       </header>
       {saveError && (
         <p className="error" role="alert">
