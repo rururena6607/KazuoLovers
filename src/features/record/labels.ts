@@ -16,5 +16,9 @@ export const MISS_TYPES: readonly { value: MissType; label: string }[] = [
   { value: 'other', label: 'その他' },
 ]
 
+/** 選択のトグル：選択中をもう一度押すと外す */
+export const toggle = <T>(current: T | null, value: T): T | null =>
+  current === value ? null : value
+
 /** 「7 渡辺」の形（要件定義書 6 章「選手は背番号と名前」） */
 export const playerLabel = (p: { number: number; name: string }): string => `${p.number} ${p.name}`

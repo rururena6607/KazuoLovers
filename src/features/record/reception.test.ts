@@ -19,11 +19,9 @@ describe('buildReception', () => {
     expect(buildReception(emptyReceptionDraft(), 'A', ids)).toBeNull()
   })
 
-  it('被エースは受けた選手なしでも作れる', () => {
-    expect(buildReception(emptyReceptionDraft(), 'ace', ids)).toMatchObject({
-      result: 'ace',
-      receiverId: null,
-    })
+  it('被エースも受けた選手が要る（テーブルの制約）', () => {
+    expect(buildReception(emptyReceptionDraft(), 'ace', ids)).toBeNull()
+    expect(buildReception(draft, 'ace', ids)).toMatchObject({ result: 'ace', receiverId: 'p12' })
   })
 
   it('A〜D は受けた選手・位置・相手サーバーを残す', () => {
@@ -53,5 +51,23 @@ describe('attachToReception', () => {
     if (!rec) throw new Error('作れない')
     const next = attachToReception(rec, { at: { x: 0.1, y: 0.2 }, oppServerId: 'o3' })
     expect(next).toMatchObject({ atX: 0.1, atY: 0.2, oppServerId: 'o3', result: 'C' })
+  })
+
+  it('相手ミスには受けた位置を付けない', () => {
+    const rec = buildReception(draft, 'opp_miss', ids)
+    if (!rec) throw new Error('作れない')
+    expect(attachToReception(rec, { at: { x: 0.1, y: 0.2 } })).toBe(rec)
+  })
+
+  it('at: null で受けた位置を消せる', () => {
+    const rec = buildReception(draft, 'B', ids)
+    if (!rec) throw new Error('作れない')
+    expect(attachToReception(rec, { at: null })).toMatchObject({ atX: null, atY: null })
+  })
+
+  it('種類だけを付け足すと、ほかの項目は変えない', () => {
+    const rec = buildReception(draft, 'B', ids)
+    if (!rec) throw new Error('作れない')
+    expect(attachToReception(rec, { oppServeType: 'jump' })).toEqual({ ...rec, oppServeType: 'jump' })
   })
 })
