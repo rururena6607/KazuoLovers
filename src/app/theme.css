@@ -125,6 +125,118 @@ button {
   flex: 1 1 180px;
 }
 
+/* 横並びの部品 */
+.row {
+  display: flex;
+  gap: 4px;
+}
+.row > .btn {
+  flex: 1 1 0;
+  padding: 0 4px;
+}
+.btn-sm {
+  min-height: 34px;
+  font-size: 13px;
+}
+.seg > .btn {
+  min-height: 38px;
+  font-weight: 700;
+}
+.results > .btn {
+  min-height: 48px;
+  font-size: 18px;
+  font-weight: 700;
+}
+/* 選手のボタンは横にスクロール */
+.chips {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chip {
+  flex: 0 0 auto;
+  min-height: 40px;
+  white-space: nowrap;
+}
+.chips-sm .chip {
+  min-height: 34px;
+  min-width: 34px;
+  padding: 0 6px;
+}
+.chips-label {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 12px;
+  color: var(--mute);
+}
+
+/* 記録画面 */
+.record {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+}
+.record-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mute);
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* コート図 */
+.court,
+.endline {
+  display: block;
+  width: 100%;
+  touch-action: manipulation;
+  cursor: crosshair;
+}
+.court-floor {
+  fill: var(--surface);
+}
+.court-highlight {
+  fill: var(--navy);
+  opacity: 0.25;
+}
+.court-line {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 0.8;
+}
+.court-zone-line {
+  stroke: var(--line-soft);
+  stroke-width: 0.5;
+  stroke-dasharray: 1.5 1.5;
+}
+.court-net {
+  stroke: var(--line);
+  stroke-width: 2;
+}
+.court-zone-num,
+.endline-num {
+  fill: var(--mute);
+  font-size: 7px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.endline-num {
+  font-size: 5px;
+}
+.court-mark {
+  fill: var(--bad);
+  stroke: var(--surface);
+  stroke-width: 0.8;
+}
+
 .placeholder {
   padding: 24px 16px;
 }
