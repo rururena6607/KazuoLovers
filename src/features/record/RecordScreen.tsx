@@ -28,11 +28,13 @@ interface Props {
   repo: RecordRepository
   /** 未送信の件数（F-17） */
   pending: number
+  /** 練習モード（F-10）に切り替える */
+  onPractice: () => void
 }
 
 const now = () => ({ clientId: crypto.randomUUID(), recordedAt: new Date().toISOString() })
 
-export default function RecordScreen({ repo, pending }: Props) {
+export default function RecordScreen({ repo, pending, onPractice }: Props) {
   const [setIndex, setSetIndex] = useState(0)
   const [sets, setSets] = useState<SetRecords[]>([])
   const [override, setOverride] = useState<ServingOverride | null>(null)
@@ -109,6 +111,9 @@ export default function RecordScreen({ repo, pending }: Props) {
             </button>
           </span>
         )}
+        <button type="button" className="btn btn-sm" onClick={onPractice}>
+          練習モード
+        </button>
       </header>
 
       <div className="scoreboard">

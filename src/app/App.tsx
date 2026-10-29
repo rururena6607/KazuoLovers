@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createFakeRecordRepository } from '../lib/data/fakeRecordRepository.ts'
-import { DEMO_MATCH, DEMO_SETS } from '../features/record/demo.ts'
+import PracticeScreen from '../features/practice/PracticeScreen.tsx'
+import { DEMO_MATCH, DEMO_PRACTICE, DEMO_PRACTICE_SET, DEMO_SETS } from '../features/record/demo.ts'
 import RecordScreen from '../features/record/RecordScreen.tsx'
 import InstallGuide from './InstallGuide.tsx'
 import TabBar from './TabBar.tsx'
@@ -10,6 +11,7 @@ import UpdatePrompt from './UpdatePrompt.tsx'
 // 本物の RecordRepository（T-14・T-15、ひろし）ができたら、ここで差し替える。
 const repo = createFakeRecordRepository({
   [DEMO_MATCH.id]: DEMO_SETS.map((s) => s.id),
+  [DEMO_PRACTICE.id]: [DEMO_PRACTICE_SET.id],
 })
 
 // 分析（とりはる）と管理（ひろし）の画面は、できたらここで差し替える。
@@ -25,6 +27,8 @@ function Placeholder({ title, task }: { title: string; task: string }) {
 export default function App() {
   const [tab, setTab] = useState<TabId>('record')
   const [pending, setPending] = useState(0)
+  /** 記録のタブで、試合の記録と練習モードを切り替える */
+  const [practice, setPractice] = useState(false)
 
   useEffect(() => repo.subscribePending(setPending), [])
 
@@ -33,7 +37,12 @@ export default function App() {
       <UpdatePrompt pending={pending} />
       <InstallGuide />
       <main className="app-main">
-        {tab === 'record' && <RecordScreen repo={repo} pending={pending} />}
+        {tab === 'record' &&
+          (practice ? (
+            <PracticeScreen repo={repo} onExit={() => setPractice(false)} />
+          ) : (
+            <RecordScreen repo={repo} pending={pending} onPractice={() => setPractice(true)} />
+          ))}
         {tab === 'analysis' && <Placeholder title="分析" task="T-21" />}
         {tab === 'admin' && <Placeholder title="管理" task="T-10" />}
       </main>
