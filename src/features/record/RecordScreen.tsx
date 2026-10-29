@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { RecordRepository, Side } from '../../contracts/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_OPP_PLAYERS, DEMO_PLAYERS, DEMO_SETS } from './demo.ts'
+import ReceptionPanel from './ReceptionPanel.tsx'
 import ServePanel from './ServePanel.tsx'
 
 // 記録画面（要件定義書 6 章「画面の要素」）。試合とセットは管理画面（T-10）ができるまで demo.ts を使う。
@@ -54,7 +55,12 @@ export default function RecordScreen({ repo }: Props) {
           onSave={save}
         />
       ) : (
-        <p className="placeholder">相手のサーブの記録は T-12 で作ります。</p>
+        <ReceptionPanel
+          setId={set.id}
+          players={DEMO_PLAYERS}
+          oppPlayers={DEMO_OPP_PLAYERS}
+          onSave={save}
+        />
       )}
     </section>
   )
