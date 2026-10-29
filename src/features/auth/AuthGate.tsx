@@ -5,13 +5,20 @@ import type { Auth, AuthSession } from '../../lib/data/auth.ts'
 import { LoginScreen } from './LoginScreen.tsx'
 
 export function AuthGate({ auth, children }: { auth: Auth; children: ReactNode }) {
-  // undefined：端末に保ったログイン状態をまだ読んでいない
-  const [session, setSession] = useState<AuthSession | null | undefined>(undefined)
+  // Supabase の確かめを待たず、端末に保ったログイン状態ですぐに出す。
+  // 電波がないと、確かめが終わるまで30秒以上かかることがある
+  const [session, setSession] = useState<AuthSession | null>(() => auth.current())
 
-  useEffect(() => auth.subscribe(setSession), [auth])
+  useEffect(() => {
+    try {
+      return auth.subscribe(setSession)
+    } catch (e) {
+      // キー（VITE_SUPABASE_*）がないと Supabase を作れない。白い画面にはせずログイン画面を出し、
+      // コードを送ろうとしたときに同じ理由を画面に出す
+      console.error(e)
+    }
+  }, [auth])
 
-  // 読むのは一瞬なので、ログイン画面がちらつかないよう何も出さない
-  if (session === undefined) return null
   if (session === null) return <LoginScreen auth={auth} />
   return <>{children}</>
 }

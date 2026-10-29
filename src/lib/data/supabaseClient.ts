@@ -2,6 +2,9 @@
 // 最初に使うときに作るので、キーのないテストや CI でも読み込むだけなら失敗しない。
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
+/** Supabase がログイン状態を localStorage に保つときのキー */
+export const SUPABASE_STORAGE_KEY = 'kazuolovers.supabase.auth'
+
 let client: SupabaseClient | null = null
 
 export function getSupabase(): SupabaseClient {
@@ -17,6 +20,7 @@ export function getSupabase(): SupabaseClient {
     auth: {
       // ログイン状態を端末（localStorage）に保ち、試合当日に再ログインを求めない（F-01）
       persistSession: true,
+      storageKey: SUPABASE_STORAGE_KEY,
       autoRefreshToken: true,
       // メールのコードでログインするので、URL からは読まない
       detectSessionInUrl: false,

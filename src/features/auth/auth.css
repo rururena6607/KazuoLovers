@@ -1,4 +1,5 @@
-/* ログイン画面。色は app/theme.css の変数を使う。 */
+/* ログイン画面。色は app/theme.css の変数を使う。
+   --on-navy と --bad は T-04（#10）で入る。入るまでは var() の2つ目の色を使う。 */
 .login {
   max-width: 360px;
   margin: 0 auto;
@@ -32,7 +33,7 @@
   border: 1px solid var(--mute);
   border-radius: 8px;
   background: var(--navy);
-  color: #fff;
+  color: var(--on-navy, #fff);
 }
 .login button:disabled {
   opacity: 0.6;
@@ -51,5 +52,5 @@
   text-decoration: underline;
 }
 .login .login-error {
-  color: #c62828;
+  color: var(--bad, #c62828);
 }

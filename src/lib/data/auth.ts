@@ -1,7 +1,7 @@
 // メールの6桁のコードでのログイン（F-01）。画面はこの Auth だけを使い、Supabase を直接呼ばない。
 // ログインリンクは iPhone ではホーム画面のアプリではなく Safari で開くので使わない。
 import type { Unsubscribe } from '../../contracts/index.ts'
-import { getSupabase } from './supabaseClient.ts'
+import { getSupabase, SUPABASE_STORAGE_KEY } from './supabaseClient.ts'
 
 export interface AuthSession {
   userId: string
@@ -15,7 +15,12 @@ export interface Auth {
   verifyCode(email: string, code: string): Promise<void>
   signOut(): Promise<void>
   /**
-   * ログイン状態が変わるたびに呼ぶ。端末に保ったログイン状態を読んだあとにも1回呼ぶ。
+   * 端末に保ったログイン状態を、通信せずにすぐ返す。起動直後の表示に使う。
+   * Supabase の確かめは、電波がないとトークンの更新を30秒以上やり直してから終わる
+   */
+  current(): AuthSession | null
+  /**
+   * ログイン状態が変わるたびに呼ぶ（同じ部員のままなら呼ばない）。端末に保ったログイン状態を読んだあとにも1回呼ぶ。
    * 電波がなくても、この端末でログアウトするまではログインしたままとして渡す
    */
   subscribe(onChange: (session: AuthSession | null) => void): Unsubscribe
@@ -52,8 +57,11 @@ export interface KeyValueStorage {
 
 const LAST_SESSION_KEY = 'kazuolovers.lastSession'
 
-/** Supabase のエラーを、画面にそのまま出せる日本語にする */
-export function toLoginErrorMessage(error: AuthErrorLike): string {
+/** Supabase のエラーを、画面にそのまま出せる日本語にする。step は、どの操作のエラーか */
+export function toLoginErrorMessage(
+  error: AuthErrorLike,
+  step: 'sendCode' | 'verifyCode' | 'signOut',
+): string {
   if (error.name === 'AuthRetryableFetchError') {
     return '通信できませんでした。電波のよい場所でもう一度試してください。'
   }
@@ -63,8 +71,10 @@ export function toLoginErrorMessage(error: AuthErrorLike): string {
       return 'メールを送りすぎました。しばらく待ってから、もう一度試してください。'
     case 'otp_expired':
       return 'コードが違うか、期限が切れています。'
-    case 'email_address_invalid':
     case 'validation_failed':
+      if (step === 'verifyCode') return 'コードの形が正しくありません。メールに届いた数字だけを入れてください。'
+      return 'メールアドレスの形が正しくありません。'
+    case 'email_address_invalid':
       return 'メールアドレスの形が正しくありません。'
   }
   if (error.status === 429) {
@@ -73,8 +83,11 @@ export function toLoginErrorMessage(error: AuthErrorLike): string {
   return `ログインできませんでした（${error.message}）`
 }
 
-function throwIfError(result: { error: AuthErrorLike | null }): void {
-  if (result.error) throw new Error(toLoginErrorMessage(result.error))
+function throwIfError(
+  result: { error: AuthErrorLike | null },
+  step: Parameters<typeof toLoginErrorMessage>[1],
+): void {
+  if (result.error) throw new Error(toLoginErrorMessage(result.error, step))
 }
 
 function readSession(storage: KeyValueStorage): AuthSession | null {
@@ -91,6 +104,26 @@ function readSession(storage: KeyValueStorage): AuthSession | null {
   }
 }
 
+/** Supabase が端末にログインを残しているか。トークンの更新を拒まれたときやログアウトしたときは Supabase が消す */
+function hasSupabaseSession(storage: KeyValueStorage): boolean {
+  try {
+    return storage.getItem(SUPABASE_STORAGE_KEY) !== null
+  } catch {
+    return false
+  }
+}
+
+/** 最後にログインした部員。Supabase が端末にログインを残しているときだけ返す */
+function lastSession(storage: KeyValueStorage): AuthSession | null {
+  return hasSupabaseSession(storage) ? readSession(storage) : null
+}
+
+function sameSession(a: AuthSession | null | undefined, b: AuthSession | null): boolean {
+  if (a === undefined) return false
+  if (a === null || b === null) return a === b
+  return a.userId === b.userId && a.email === b.email
+}
+
 function writeSession(storage: KeyValueStorage, session: AuthSession | null): void {
   try {
     if (session) storage.setItem(LAST_SESSION_KEY, JSON.stringify(session))
@@ -104,30 +137,44 @@ function writeSession(storage: KeyValueStorage, session: AuthSession | null): vo
 export function createAuth(getClient: () => AuthClient, storage: KeyValueStorage): Auth {
   return {
     async sendCode(email) {
-      throwIfError(await getClient().signInWithOtp({ email: email.trim() }))
+      throwIfError(await getClient().signInWithOtp({ email: email.trim() }), 'sendCode')
     },
     async verifyCode(email, code) {
       const token = code.replace(/\s/g, '')
-      throwIfError(await getClient().verifyOtp({ email: email.trim(), token, type: 'email' }))
+      throwIfError(
+        await getClient().verifyOtp({ email: email.trim(), token, type: 'email' }),
+        'verifyCode',
+      )
     },
     async signOut() {
-      // この端末だけログアウトする。電波がないと失敗し、ログインしたままになる
-      throwIfError(await getClient().signOut({ scope: 'local' }))
+      // この端末だけログアウトする。電波がなくてサーバーに伝えられなくても、Supabase は
+      // 端末のログインを消して SIGNED_OUT を出してからエラーを返す。消えていればログアウトできている
+      const result = await getClient().signOut({ scope: 'local' })
+      if (result.error && !hasSupabaseSession(storage)) return
+      throwIfError(result, 'signOut')
+    },
+    current() {
+      return lastSession(storage)
     },
     subscribe(onChange) {
+      let last: AuthSession | null | undefined
+      const update = (s: AuthSession | null) => {
+        // タブに戻ったときの SIGNED_IN やトークンの更新では、同じ部員のままなので知らせない
+        if (sameSession(last, s)) return
+        last = s
+        writeSession(storage, s)
+        onChange(s)
+      }
       const { data } = getClient().onAuthStateChange((event, session) => {
         if (session) {
-          const s = { userId: session.user.id, email: session.user.email ?? null }
-          writeSession(storage, s)
-          onChange(s)
+          update({ userId: session.user.id, email: session.user.email ?? null })
         } else if (event === 'INITIAL_SESSION') {
-          // 電波がなくてトークンを更新できないと、端末にログインが残っていても null が来る。
-          // ログアウトの通知（SIGNED_OUT）が来るまでは、最後にログインした部員のままにする。
-          // 電波が戻ると Supabase が更新し、TOKEN_REFRESHED が来る
-          onChange(readSession(storage))
+          // 電波がなくてトークンを更新できないと、Supabase は端末にログインを残したまま null を渡す。
+          // 残っているときだけ、最後にログインした部員のままにする。電波が戻ると TOKEN_REFRESHED が来る。
+          // 更新を拒まれた（リフレッシュトークンが無効）ときは、Supabase が端末のログインを消しているので null にする
+          update(lastSession(storage))
         } else {
-          writeSession(storage, null)
-          onChange(null)
+          update(null)
         }
       })
       return () => data.subscription.unsubscribe()

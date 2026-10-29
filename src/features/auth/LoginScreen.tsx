@@ -11,10 +11,12 @@ export function LoginScreen({ auth }: { auth: Auth }) {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true)
     setError(null)
+    setNotice(null)
     try {
       await action()
     } catch (e) {
@@ -79,7 +81,13 @@ export function LoginScreen({ auth }: { auth: Auth }) {
               type="button"
               className="login-link"
               disabled={busy}
-              onClick={() => void run(() => auth.sendCode(step.email))}
+              onClick={() =>
+                void run(async () => {
+                  await auth.sendCode(step.email)
+                  // 送れたと分からないと何度も押され、メールの送信の上限に当たる
+                  setNotice('コードを送り直しました。新しいメールのコードを入れてください。')
+                })
+              }
             >
               コードを送り直す
             </button>
@@ -89,6 +97,7 @@ export function LoginScreen({ auth }: { auth: Auth }) {
               disabled={busy}
               onClick={() => {
                 setError(null)
+                setNotice(null)
                 setStep({ kind: 'email' })
               }}
             >
@@ -97,6 +106,7 @@ export function LoginScreen({ auth }: { auth: Auth }) {
           </div>
         </form>
       )}
+      {notice && <p role="status">{notice}</p>}
       {error && (
         <p className="login-error" role="alert">
           {error}
