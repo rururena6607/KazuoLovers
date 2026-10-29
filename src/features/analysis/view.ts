@@ -95,9 +95,9 @@ export interface Cell {
   negative: boolean
 }
 
-const countCell = (n: number): Cell => ({ text: String(n), reference: false, negative: false })
+export const countCell = (n: number): Cell => ({ text: String(n), reference: false, negative: false })
 
-const rateCell = (value: number | null, count: number): Cell => ({
+export const rateCell = (value: number | null, count: number): Cell => ({
   text: formatRate(value, count),
   reference: value !== null && isReference(count),
   negative: value !== null && value < 0 && formatPercent(value).startsWith('−'),

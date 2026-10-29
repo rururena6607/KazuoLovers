@@ -33,7 +33,19 @@ const data: AnalysisData = {
       ],
       receptions: [],
       attacks: [],
-      points: [],
+      points: [
+        {
+          kind: 'point',
+          clientId: 'pt1',
+          setId: 's1',
+          side: 'us',
+          cause: 'ace',
+          sourceId: 'c1',
+          ourScore: 1,
+          oppScore: 0,
+          recordedAt: '2026-10-20T00:00:01Z',
+        },
+      ],
     },
   ],
 }
@@ -56,5 +68,29 @@ describe('AnalysisScreen', () => {
 
   it('参考値の説明を出す', () => {
     expect(html).toContain('10 本未満の参考値')
+  })
+})
+
+describe('AnalysisScreen：試合とセット', () => {
+  it('試合を選ぶと、セット別の結果の表を出す（セットの行をタップできる）', () => {
+    const html = renderToString(<AnalysisScreen data={data} initialKind="match" />)
+    expect(html).toContain('セット別の結果')
+    expect(html).toContain('第1セット')
+    expect(html).toContain('1-0')
+    expect(html).toContain('ミス数')
+  })
+
+  it('セットを選ぶと、得点の推移を出す', () => {
+    const html = renderToString(<AnalysisScreen data={data} initialKind="set" />)
+    expect(html).toContain('得点の推移')
+    expect(html).toContain('1点目')
+    expect(html).toContain('7 渡辺 サービスエース')
+    expect(html).not.toContain('セット別の結果')
+  })
+
+  it('全体では、セット別の結果も得点の推移も出さない', () => {
+    const html = renderToString(<AnalysisScreen data={data} />)
+    expect(html).not.toContain('セット別の結果')
+    expect(html).not.toContain('得点の推移')
   })
 })

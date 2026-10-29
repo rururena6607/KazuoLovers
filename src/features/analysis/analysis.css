@@ -163,3 +163,41 @@
   color: var(--mute);
   font-size: 13px;
 }
+.an-link {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+.an-trend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 2px solid var(--an-line);
+}
+.an-trend li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px;
+  border-bottom: 1px solid var(--an-line);
+  font-size: 14px;
+}
+.an-trend li:last-child {
+  border-bottom: 0;
+}
+.an-trend-opp {
+  color: var(--an-neg);
+}
+.an-trend-no {
+  min-width: 3.5em;
+  color: var(--mute);
+}
+.an-trend-score {
+  min-width: 3.5em;
+  font-weight: 700;
+}
