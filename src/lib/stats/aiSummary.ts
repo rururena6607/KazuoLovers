@@ -1,11 +1,13 @@
 // AI（Gemini）に送る集計の JSON（要件定義書 F-13、「Geminiへの問い合わせ」）。T-31。
 // 送るのは背番号と数値だけ。選手の名前・チーム名・学校名・日付は入れない（外部 AI に送る前提）。
 // 各値には本数を添え、MIN_SAMPLE 本未満には reference を付ける（本数が少ない項目は断定しないよう AI に指示するため）。
-// 率は小数第1位に丸める（外部に出す値で、集計の途中ではない）。
+// 率は小数第1位に丸める（外部に出す値で、集計の途中ではない。丸め方は画面の toFixed(1) と同じ）。
+// 渡す記録は試合のものだけにする（練習は metrics.ts の前提と同じ理由で混ぜない）。
 import {
   MIN_SAMPLE,
   type AttackStats,
   type AttackType,
+  type GameSet,
   type Grade,
   type Player,
   type ReceptionStats,
@@ -21,13 +23,19 @@ import {
   receptionStatsByZone,
   serveStatsByLandingZone,
   serveStatsByType,
+  summaryOf,
+  type ZoneOf,
 } from './aggregate.ts'
-import { attackStatsOf, receptionStatsOf, serveStatsOf } from './metrics.ts'
+import {
+  attackStatsOf,
+  breakRateOfStats,
+  receptionStatsOf,
+  serveStatsOf,
+} from './metrics.ts'
 
-export interface AiSetInput {
-  setNo: number
-  ourScore: number
-  oppScore: number
+export type AiSetInput = Pick<GameSet, 'setNo' | 'ourScore' | 'oppScore'> & {
+  /** 何試合目か（1 から）。範囲に複数の試合のセットが入るとき、同じセット番号を区別する。日付は送らない */
+  matchNo: number
   records: SetRecords
 }
 
@@ -59,40 +67,54 @@ export interface AiAttack {
   reference: boolean
 }
 
+/**
+ * 選手ごとの行。名前の代わりに背番号を出す。選手の id は出さないので、同じ背番号の別人
+ * （引退した選手の番号の再利用）は別の行になり、引退した選手には retired が付く
+ */
+export type AiPlayerRow<T> = { number: number; retired: boolean } & T
+
 export interface AiSummary {
   /** これより少ない本数は参考値 */
   minSample: number
-  sets: {
-    setNo: number
-    ourScore: number
-    oppScore: number
+  sets: ({ matchNo: number; setNo: number; ourScore: number; oppScore: number } & {
     serve: AiServe
     reception: AiReception
     attack: AiAttack
-  }[]
+  })[]
   serve: {
     total: AiServe
-    byPlayer: ({ number: number } & AiServe)[]
+    byPlayer: AiPlayerRow<AiServe>[]
+    /** 名簿にない選手のサーブの本数（total には入っているが byPlayer にはない） */
+    unassigned: number
     byType: ({ type: ServeType } & AiServe)[]
-    /** 相手コートの着弾ゾーン別。C・D率 =（C＋D）÷ 本数。本数のあるゾーンだけ */
-    byLandingZone: { zone: number; attempts: number; cdRate: number | null; reference: boolean }[]
+    /** 相手コートの着弾ゾーン別。崩し率 =（エース＋C＋D）÷ 本数（要件定義書 5 章）。本数のあるゾーンだけ */
+    byLandingZone: { zone: number; attempts: number; breakRate: number; reference: boolean }[]
   }
   reception: {
     total: AiReception
-    byPlayer: ({ number: number } & AiReception)[]
+    byPlayer: AiPlayerRow<AiReception>[]
+    /** 名簿にない選手のレシーブの本数（相手ミスは数えない） */
+    unassigned: number
     /** 自コートの受けた位置別。本数のあるゾーンだけ */
     byZone: ({ zone: number } & AiReception)[]
     byOppServeType: ({ type: ServeType } & AiReception)[]
   }
   attack: {
     total: AiAttack
-    byPlayer: ({ number: number } & AiAttack)[]
+    byPlayer: AiPlayerRow<AiAttack>[]
+    /** 名簿にない選手のアタックの本数 */
+    unassigned: number
     byType: ({ type: AttackType } & AiAttack)[]
     byPrevReception: ({ grade: Grade } & AiAttack)[]
   }
 }
 
-const round1 = (v: number | null): number | null => (v === null ? null : Math.round(v * 10) / 10)
+/** 小数第1位に丸める。符号を外して丸めるので、プラスとマイナスで同じ値になる（画面の toFixed(1) と同じ） */
+const round1 = (v: number | null): number | null => {
+  if (v === null) return null
+  const rounded = Number(Math.abs(v).toFixed(1))
+  return v < 0 && rounded !== 0 ? -rounded : rounded
+}
 const isRef = (count: number): boolean => count < MIN_SAMPLE
 
 const aiServe = (s: ServeStats): AiServe => ({
@@ -116,77 +138,90 @@ const aiAttack = (s: AttackStats): AiAttack => ({
   reference: isRef(s.attempts),
 })
 
-/** 背番号ごとに分ける。名簿にない選手は入れない。同じ背番号の選手（引退者の番号の再利用など）は合算する */
-function byNumber<T>(
+/**
+ * 選手ごとの行。名簿にない選手は rows に入れず、その記録の本数を unassigned に数える。
+ * playerIdOf が null を返す記録（相手ミスなど、選手がいないもの）は、どちらにも入れない。
+ * 並びは背番号順で、同じ背番号なら現役が先
+ */
+function byRoster<T, V>(
   items: readonly T[],
   playerIdOf: (item: T) => string | null,
-  numberOfPlayer: ReadonlyMap<string, number>,
-): [number, T[]][] {
-  const groups = groupBy(items, (item) => {
-    const id = playerIdOf(item)
-    return id === null ? null : (numberOfPlayer.get(id) ?? null)
-  })
-  return [...groups].sort(([a], [b]) => a - b)
+  players: readonly Player[],
+  toRow: (items: T[]) => V,
+): { rows: AiPlayerRow<V>[]; unassigned: number } {
+  const playerById = new Map(players.map((p) => [p.id, p]))
+  const groups = groupBy(items, playerIdOf)
+  const rows: AiPlayerRow<V>[] = []
+  let unassigned = 0
+  for (const [id, group] of groups) {
+    const player = playerById.get(id)
+    if (!player) unassigned += group.length
+    else rows.push({ number: player.number, retired: !player.active, ...toRow(group) })
+  }
+  rows.sort((a, b) => a.number - b.number || Number(a.retired) - Number(b.retired))
+  return { rows, unassigned }
 }
 
-export function buildAiSummary(input: AiSummaryInput): AiSummary {
-  const numberOfPlayer = new Map(input.players.map((p) => [p.id, p.number]))
-  const sets = [...input.sets].sort((a, b) => a.setNo - b.setNo)
+export function buildAiSummary(input: AiSummaryInput, zoneOf: ZoneOf): AiSummary {
+  const sets = [...input.sets].sort((a, b) => a.matchNo - b.matchNo || a.setNo - b.setNo)
   const serves = sets.flatMap((s) => s.records.serves)
   const receptions = sets.flatMap((s) => s.records.receptions)
   const attacks = sets.flatMap((s) => s.records.attacks)
+  const total = summaryOf({ serves, receptions, attacks })
+
+  const serveRows = byRoster(serves, (s) => s.serverId, input.players, (g) => aiServe(serveStatsOf(g)))
+  const receptionRows = byRoster(receptions, (r) => r.receiverId, input.players, (g) =>
+    aiReception(receptionStatsOf(g)),
+  )
+  const attackRows = byRoster(attacks, (a) => a.attackerId, input.players, (g) => aiAttack(attackStatsOf(g)))
 
   return {
     minSample: MIN_SAMPLE,
-    sets: sets.map((s) => ({
-      setNo: s.setNo,
-      ourScore: s.ourScore,
-      oppScore: s.oppScore,
-      serve: aiServe(serveStatsOf(s.records.serves)),
-      reception: aiReception(receptionStatsOf(s.records.receptions)),
-      attack: aiAttack(attackStatsOf(s.records.attacks)),
-    })),
+    sets: sets.map((s) => {
+      const sum = summaryOf(s.records)
+      return {
+        matchNo: s.matchNo,
+        setNo: s.setNo,
+        ourScore: s.ourScore,
+        oppScore: s.oppScore,
+        serve: aiServe(sum.serve),
+        reception: aiReception(sum.reception),
+        attack: aiAttack(sum.attack),
+      }
+    }),
     serve: {
-      total: aiServe(serveStatsOf(serves)),
-      byPlayer: byNumber(serves, (s) => s.serverId, numberOfPlayer).map(([number, group]) => ({
-        number,
-        ...aiServe(serveStatsOf(group)),
-      })),
+      total: aiServe(total.serve),
+      byPlayer: serveRows.rows,
+      unassigned: serveRows.unassigned,
       byType: [...serveStatsByType(serves)].map(([type, s]) => ({ type, ...aiServe(s) })),
-      byLandingZone: [...serveStatsByLandingZone(serves)]
+      byLandingZone: [...serveStatsByLandingZone(serves, zoneOf)]
         .filter(([, s]) => s.attempts > 0)
         .map(([zone, s]) => ({
           zone,
           attempts: s.attempts,
-          cdRate: round1((s.effects * 100) / s.attempts),
+          breakRate: round1(breakRateOfStats(s)) ?? 0,
           reference: isRef(s.attempts),
         })),
     },
     reception: {
-      total: aiReception(receptionStatsOf(receptions)),
-      byPlayer: byNumber(receptions, (r) => r.receiverId, numberOfPlayer).map(([number, group]) => ({
-        number,
-        ...aiReception(receptionStatsOf(group)),
-      })),
-      byZone: [...receptionStatsByZone(receptions)]
+      total: aiReception(total.reception),
+      byPlayer: receptionRows.rows,
+      unassigned: receptionRows.unassigned,
+      byZone: [...receptionStatsByZone(receptions, zoneOf)]
         .filter(([, s]) => s.receptions > 0)
         .map(([zone, s]) => ({ zone, ...aiReception(s) })),
-      byOppServeType: [...receptionStatsByOppServeType(receptions)].map(([type, s]) => ({
-        type,
-        ...aiReception(s),
-      })),
+      byOppServeType: [...receptionStatsByOppServeType(receptions)]
+        .filter(([, s]) => s.receptions > 0)
+        .map(([type, s]) => ({ type, ...aiReception(s) })),
     },
     attack: {
-      total: aiAttack(attackStatsOf(attacks)),
-      byPlayer: byNumber(attacks, (a) => a.attackerId, numberOfPlayer).map(([number, group]) => ({
-        number,
-        ...aiAttack(attackStatsOf(group)),
-      })),
+      total: aiAttack(total.attack),
+      byPlayer: attackRows.rows,
+      unassigned: attackRows.unassigned,
       byType: [...attackStatsByType(attacks)].map(([type, s]) => ({ type, ...aiAttack(s) })),
-      byPrevReception: [...attackStatsByPrevReception(attacks)].map(([grade, s]) => ({
-        grade,
-        ...aiAttack(s),
-      })),
+      byPrevReception: [...attackStatsByPrevReception(attacks)]
+        .filter(([, s]) => s.attempts > 0)
+        .map(([grade, s]) => ({ grade, ...aiAttack(s) })),
     },
   }
 }
