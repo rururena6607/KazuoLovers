@@ -10,6 +10,7 @@ import type {
   ReceptionStats,
   ReceptionStatsOf,
   ServeRecord,
+  ServeStats,
   ServeStatsOf,
 } from '../../contracts/index.ts'
 
@@ -56,11 +57,11 @@ export const serveStatsOf: ServeStatsOf = (serves) => {
   }
 }
 
-/** 崩し率 =（エース ＋ C ＋ D）÷ 打数（相手を崩した割合。アプリ独自の補助指標） */
-export function breakRateOf(serves: readonly ServeRecord[]): number | null {
-  const { aces, effects, attempts } = serveStatsOf(serves)
-  return percent(aces + effects, attempts)
-}
+/** 崩し率 =（エース ＋ C ＋ D）÷ 打数（相手を崩した割合。アプリ独自の補助指標）。集計済みの値から出す */
+export const breakRateOfStats = (s: ServeStats): number | null => percent(s.aces + s.effects, s.attempts)
+
+export const breakRateOf = (serves: readonly ServeRecord[]): number | null =>
+  breakRateOfStats(serveStatsOf(serves))
 
 /** 受けた結果の並びから出す。自チームのレシーブと、相手選手別のレシーブ（自チームのサーブ側の記録）で共通 */
 export const receptionStatsOfResults = (results: readonly ReceptionResult[]): ReceptionStats => {

@@ -1,6 +1,7 @@
 export {
   attackStatsOf,
   breakRateOf,
+  breakRateOfStats,
   excellentRateOf,
   percent,
   receptionStatsOf,
