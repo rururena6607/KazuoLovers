@@ -246,6 +246,39 @@ button {
   font-weight: 700;
 }
 
+/* 下部：直前の1本と取消（F-08） */
+.record-foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line-soft);
+}
+.last-entry {
+  flex: 1;
+  overflow: hidden;
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.list-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.list-main {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.list-main > .num {
+  flex: 1;
+}
+
 .panel {
   display: flex;
   flex-direction: column;
