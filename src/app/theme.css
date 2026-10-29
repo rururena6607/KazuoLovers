@@ -11,6 +11,7 @@
   --mute: #5d6380;
   --line: #171b30;
   --line-soft: #c9cddc;
+  --bad: #c0392b;
   --font: system-ui, 'Hiragino Sans', 'Yu Gothic', sans-serif;
   --border: 2px solid var(--line);
   --tabbar-h: 56px;
@@ -27,6 +28,7 @@
     --mute: #9ba2c0;
     --line: #e9ecf6;
     --line-soft: #3a4060;
+    --bad: #ff6b5b;
     color-scheme: dark;
   }
 }
@@ -126,6 +128,52 @@ button {
 .banner span {
   flex: 1 1 180px;
 }
+
+/* コート図 */
+.court,
+.endline {
+  display: block;
+  width: 100%;
+  touch-action: manipulation;
+  cursor: crosshair;
+}
+.court-floor {
+  fill: var(--surface);
+}
+.court-highlight {
+  fill: var(--selected);
+  opacity: 0.25;
+}
+.court-line {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 0.8;
+}
+.court-zone-line {
+  stroke: var(--line-soft);
+  stroke-width: 0.5;
+  stroke-dasharray: 1.5 1.5;
+}
+.court-net {
+  stroke: var(--line);
+  stroke-width: 2;
+}
+.court-zone-num,
+.endline-num {
+  fill: var(--mute);
+  font-size: 7px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.endline-num {
+  font-size: 5px;
+}
+.court-mark {
+  fill: var(--bad);
+  stroke: var(--surface);
+  stroke-width: 0.8;
+}
+
 
 .placeholder {
   padding: 24px 16px;
