@@ -19,11 +19,13 @@ export const emptyReceptionDraft = (): ReceptionDraft => ({
   oppServeType: null,
 })
 
-/** A〜D は受けた選手が要る。被エースは触れていないこともあるので任意 */
-export const needsReceiver = (outcome: ReceptionOutcome): boolean =>
-  outcome !== 'ace' && outcome !== 'opp_miss'
+/** 相手ミス以外は受けた選手が要る（receptions テーブルの制約と同じ。被エースは近くにいた選手） */
+export const needsReceiver = (outcome: ReceptionOutcome): boolean => outcome !== 'opp_miss'
 
-/** 確定した1本。A〜D で受けた選手がいなければ null */
+/** あとから付け足せる任意項目 */
+export type ReceptionPatch = Partial<Pick<ReceptionDraft, 'at' | 'oppServerId' | 'oppServeType'>>
+
+/** 確定した1本。受けた選手が要るのにいなければ null */
 export function buildReception(
   draft: ReceptionDraft,
   outcome: ReceptionOutcome,
@@ -46,11 +48,11 @@ export function buildReception(
   }
 }
 
-/** 任意項目を直前の1本に付け足す（6 章「任意項目はあとから付けられる」） */
-export function attachToReception(
-  rec: ReceptionRecord,
-  patch: Partial<Pick<ReceptionDraft, 'at' | 'oppServerId' | 'oppServeType'>>,
-): ReceptionRecord {
+/**
+ * 任意項目を直前の1本に付け足す（6 章「任意項目はあとから付けられる」）。
+ * 相手ミスは誰も受けていないので、受けた位置は付けない。何も変わらなければ rec をそのまま返す。
+ */
+export function attachToReception(rec: ReceptionRecord, patch: ReceptionPatch): ReceptionRecord {
   const next = { ...rec }
   if (patch.at !== undefined && rec.result !== 'opp_miss') {
     next.atX = patch.at?.x ?? null
@@ -58,5 +60,7 @@ export function attachToReception(
   }
   if (patch.oppServerId !== undefined) next.oppServerId = patch.oppServerId
   if (patch.oppServeType !== undefined) next.oppServeType = patch.oppServeType
-  return next
+  // 何も変わらないときは同じものを返す（画面で保存を省くため）
+  const same = (Object.keys(next) as (keyof ReceptionRecord)[]).every((k) => next[k] === rec[k])
+  return same ? rec : next
 }
