@@ -136,6 +136,83 @@ button {
   flex: 1 1 180px;
 }
 
+/* 保存の失敗などのお知らせ */
+.error {
+  margin: 0;
+  padding: 6px 8px;
+  border: var(--border);
+  border-color: var(--bad);
+  color: var(--bad);
+  font-size: 13px;
+}
+
+/* 横並びの部品 */
+.row {
+  display: flex;
+  gap: 4px;
+}
+.row > .btn {
+  flex: 1 1 0;
+  padding: 0 4px;
+}
+.btn-sm {
+  min-height: 34px;
+  font-size: 13px;
+}
+.seg > .btn {
+  min-height: 38px;
+  font-weight: 700;
+}
+.results > .btn {
+  min-height: 48px;
+  font-size: 18px;
+  font-weight: 700;
+}
+/* 選手のボタンは横にスクロール */
+.chips {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chip {
+  flex: 0 0 auto;
+  min-height: 40px;
+  white-space: nowrap;
+}
+.chips-sm .chip {
+  min-height: 34px;
+  min-width: 34px;
+  padding: 0 6px;
+}
+.chips-label {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 12px;
+  color: var(--mute);
+}
+
+/* 記録画面 */
+.record {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+}
+.record-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mute);
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* コート図 */
 .court,
 .endline {
@@ -180,7 +257,6 @@ button {
   stroke: var(--surface);
   stroke-width: 0.8;
 }
-
 
 .placeholder {
   padding: 24px 16px;

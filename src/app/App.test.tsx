@@ -6,7 +6,7 @@ describe('App', () => {
   it('最初は記録のタブを開き、タブバーを出す', () => {
     const html = renderToString(<App />)
     expect(html).toContain('class="tabbar"')
-    expect(html).toMatch(/<div>(<!-- -->)?<section class="placeholder"><h1>記録<\/h1>/)
+    expect(html).toContain('自チームのサーブ')
   })
 
   it('選択中以外の画面も描いたまま hidden で隠す', () => {
