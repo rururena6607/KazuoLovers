@@ -8,6 +8,8 @@ import type {
 import { setWinner } from '../../lib/rally/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_OPP_PLAYERS, DEMO_PLAYERS, DEMO_SETS } from './demo.ts'
 import { describe, entriesOf, idsToRemove, renumberPoints, type Entry } from './history.ts'
+import { prevReceptionOf } from './attack.ts'
+import RallyPanel from './RallyPanel.tsx'
 import ReceptionPanel from './ReceptionPanel.tsx'
 import RecordList from './RecordList.tsx'
 import ScoreButton from './ScoreButton.tsx'
@@ -41,6 +43,8 @@ export default function RecordScreen({ repo, pending, onPractice }: Props) {
   const [showList, setShowList] = useState(false)
   /** 取消・削除のたびに増やし、入力欄の「直前の1本」を消す */
   const [resetKey, setResetKey] = useState(0)
+  /** ラリー中に出す入力：アタック（T-40）か、直前のサーブ・レシーブへの付け足し */
+  const [rallyTab, setRallyTab] = useState<'attack' | 'serve'>('attack')
 
   useEffect(() => repo.subscribe(DEMO_MATCH.id, setSets), [repo])
 
@@ -54,11 +58,16 @@ export default function RecordScreen({ repo, pending, onPractice }: Props) {
   const state = rallyStateOf(points, override)
   const winner = setWinner(state, setPointsOf(set.setNo, DEMO_MATCH.setPoints))
   const isLastSet = setIndex === DEMO_SETS.length - 1
+  const rally = inRally(plays, points)
+  const showAttack = rally && rallyTab === 'attack' && !showList
 
   const savePlay = (rec: PlayRecord) => {
     void repo.save(rec)
     const pt = autoPoint(rec, state, points, now())
     if (pt) void repo.save(pt)
+    // 新しいサーブ・レシーブのあとにラリーになったら、まずアタックの入力を出す（付け足しのときは変えない）
+    const isNew = !plays.some((p) => p.clientId === rec.clientId)
+    if (isNew && rec.kind !== 'attack') setRallyTab('attack')
   }
 
   const plus = (side: Side) => {
@@ -166,8 +175,28 @@ export default function RecordScreen({ repo, pending, onPractice }: Props) {
         </button>
       </div>
 
-      {inRally(plays, points) && (
-        <p className="rally-hint">ラリー中：得点したチームの数字をタップ</p>
+      {rally && (
+        <>
+          <p className="rally-hint">ラリー中：アタックを記録するか、得点したチームの数字をタップ</p>
+          <div className="row seg" role="group" aria-label="ラリー中の入力">
+            <button
+              type="button"
+              className="btn btn-sm"
+              aria-pressed={rallyTab === 'attack'}
+              onClick={() => setRallyTab('attack')}
+            >
+              アタック
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              aria-pressed={rallyTab === 'serve'}
+              onClick={() => setRallyTab('serve')}
+            >
+              {state.serving === 'us' ? 'サーブ' : 'レシーブ'}（付け足し）
+            </button>
+          </div>
+        </>
       )}
 
       {showList ? (
@@ -179,22 +208,37 @@ export default function RecordScreen({ repo, pending, onPractice }: Props) {
           onEdit={(e) => void repo.save(e)}
           onClose={() => setShowList(false)}
         />
-      ) : state.serving === 'us' ? (
-        <ServePanel
-          key={`${set.id}-${resetKey}`}
-          setId={set.id}
-          players={DEMO_PLAYERS}
-          oppPlayers={DEMO_OPP_PLAYERS}
-          onSave={savePlay}
-        />
       ) : (
-        <ReceptionPanel
-          key={`${set.id}-${resetKey}`}
-          setId={set.id}
-          players={DEMO_PLAYERS}
-          oppPlayers={DEMO_OPP_PLAYERS}
-          onSave={savePlay}
-        />
+        <>
+          {showAttack && (
+            <RallyPanel
+              setId={set.id}
+              players={DEMO_PLAYERS}
+              prevReception={prevReceptionOf(plays)}
+              onSave={savePlay}
+            />
+          )}
+          {/* ラリー中も入力欄を消さずに隠し、受けた相手などをあとから付け足せるようにする */}
+          <div hidden={showAttack}>
+            {state.serving === 'us' ? (
+              <ServePanel
+                key={`${set.id}-${resetKey}`}
+                setId={set.id}
+                players={DEMO_PLAYERS}
+                oppPlayers={DEMO_OPP_PLAYERS}
+                onSave={savePlay}
+              />
+            ) : (
+              <ReceptionPanel
+                key={`${set.id}-${resetKey}`}
+                setId={set.id}
+                players={DEMO_PLAYERS}
+                oppPlayers={DEMO_OPP_PLAYERS}
+                onSave={savePlay}
+              />
+            )}
+          </div>
+        </>
       )}
 
       <footer className="record-foot">

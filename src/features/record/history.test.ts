@@ -73,6 +73,23 @@ group('describe', () => {
     expect(d(reception({ result: 'ace' }))).toBe('受 #12 被エース')
     expect(d(reception({ result: 'opp_miss', receiverId: null }))).toBe('相手ミス')
   })
+  it('アタック', () => {
+    expect(
+      d({
+        kind: 'attack',
+        clientId: 'at',
+        setId: 's1',
+        attackerId: 'p7',
+        attackType: 'back',
+        isBack: true,
+        toX: null,
+        toY: null,
+        result: 'blocked',
+        prevReception: null,
+        recordedAt: t(0),
+      }),
+    ).toBe('#7 バックアタック 被ブロック')
+  })
   it('手動の得点', () => {
     expect(d(point({ side: 'opp', ourScore: 3, oppScore: 5 }))).toBe('+1 相手（3-5）')
   })
