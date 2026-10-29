@@ -22,13 +22,17 @@ interface Props {
   oppPlayers: readonly OpponentPlayer[]
   /** 新しい1本の保存と、直前の1本への付け足し（同じ clientId で上書き）の両方に使う */
   onSave: (rec: ServeRecord) => void
+  /** 取消・削除した clientId。直前の1本が消えたら付け足しをやめる */
+  removed: ReadonlySet<string>
 }
 
-export default function ServePanel({ setId, players, oppPlayers, onSave }: Props) {
+export default function ServePanel({ setId, players, oppPlayers, onSave, removed }: Props) {
   const [draft, setDraft] = useState<ServeDraft>(emptyDraft)
   const [pickingMiss, setPickingMiss] = useState(false)
   /** 受けた相手をあとから付け足せる直前の1本。次の1本の入力を始めたら null */
-  const [last, setLast] = useState<ServeRecord | null>(null)
+  const [saved, setLast] = useState<ServeRecord | null>(null)
+  // 取消・削除で消えた1本には付け足さない
+  const last = saved && !removed.has(saved.clientId) ? saved : null
 
   /** 次の1本の入力。どの項目でも、触ったら直前の1本への付け足しは終わる */
   const update = (patch: Partial<ServeDraft>) => {
