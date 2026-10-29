@@ -18,6 +18,8 @@ import {
   type ServeRow,
 } from './recordRows.ts'
 import { getSupabase } from './supabaseClient.ts'
+import { startAutoRetry } from './autoRetry.ts'
+import { createIndexedDbPendingStore } from './pendingStore.ts'
 
 const ALL_TABLES = Object.values(TABLES)
 
@@ -84,7 +86,12 @@ export function createSupabaseRecordStore(getClient: () => SupabaseClient): Remo
   }
 }
 
-/** アプリで使う RecordRepository。画面はフェイクの代わりにこれを使う */
+/**
+ * アプリで使う RecordRepository。画面はフェイクの代わりにこれを使う。
+ * 送信待ちは IndexedDB に残し、未送信があるあいだは自動で送り直す（T-15）
+ */
 export const recordRepository: RecordRepository = createRecordRepository(
   createSupabaseRecordStore(getSupabase),
+  createIndexedDbPendingStore(),
 )
+startAutoRetry(recordRepository)
