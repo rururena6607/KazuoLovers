@@ -2,6 +2,8 @@
 // 率は % の数値で、丸めない。分母が 0 なら null。
 import type {
   AttackStatsOf,
+  ReceptionResult,
+  ReceptionStats,
   ReceptionStatsOf,
   ServeStatsOf,
 } from '../../contracts/index.ts'
@@ -30,17 +32,18 @@ export const serveStatsOf: ServeStatsOf = (serves) => {
   }
 }
 
-export const receptionStatsOf: ReceptionStatsOf = (records) => {
+/** 受けた結果の並びから出す。自チームのレシーブと、相手選手別のレシーブ（自チームのサーブ側の記録）で共通 */
+export const receptionStatsOfResults = (results: readonly ReceptionResult[]): ReceptionStats => {
   let receptions = 0
   let excellent = 0
   let good = 0
   let aced = 0
-  for (const r of records) {
-    if (r.result === 'opp_miss') continue
+  for (const result of results) {
+    if (result === 'opp_miss') continue
     receptions++
-    if (r.result === 'A') excellent++
-    else if (r.result === 'B') good++
-    else if (r.result === 'ace') aced++
+    if (result === 'A') excellent++
+    else if (result === 'B') good++
+    else if (result === 'ace') aced++
   }
   return {
     receptions,
@@ -51,6 +54,9 @@ export const receptionStatsOf: ReceptionStatsOf = (records) => {
     acedRate: ratio(aced * 100, receptions),
   }
 }
+
+export const receptionStatsOf: ReceptionStatsOf = (records) =>
+  receptionStatsOfResults(records.map((r) => r.result))
 
 export const attackStatsOf: AttackStatsOf = (attacks) => {
   let kills = 0

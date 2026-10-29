@@ -1,1 +1,2 @@
-export { attackStatsOf, receptionStatsOf, serveStatsOf } from './metrics.ts'
+export { attackStatsOf, receptionStatsOf, receptionStatsOfResults, serveStatsOf } from './metrics.ts'
+export * from './aggregate.ts'
