@@ -12,14 +12,22 @@ Supabase CLI を入れていなくても、ダッシュボードの SQL Editor �
 
 流した SQL は、もう一度流さない（同じテーブルを作ろうとしてエラーになる）。テーブルを変えるときは、新しいファイルを `migrations/` に足す。
 
-## 認証の設定（T-03 の前に）
+## 認証の設定（T-03）
 
-「Authentication → URL Configuration」で次を設定する。
+ログインは、メールに届く6桁のコードを入れる方式にする（ログインリンクは、iPhone ではホーム画面のアプリではなく Safari で開くので使わない）。
 
-- **Site URL**：Vercel の本番の URL
-- **Redirect URLs**：Vercel の本番の URL、`http://localhost:5173`
+1. 「Authentication → Emails → Templates」で、**Confirm signup** と **Magic Link** の2つの本文に `{{ .Token }}` を入れる。初めてログインする人には Confirm signup が、2回目からは Magic Link が届く。例：
 
-設定しないと、メールのログインリンクからアプリに戻れない。
+   ```html
+   <h2>サーブレシーブ記録のログイン</h2>
+   <p>アプリに次のコードを入れてください（1時間有効）。</p>
+   <p style="font-size:24px;font-weight:bold">{{ .Token }}</p>
+   ```
+
+2. 「Authentication → Providers → Email」で、**Email OTP Length** が 6 になっていることを確かめる
+3. 「Authentication → URL Configuration」の **Site URL** に Vercel の本番の URL を入れる（メールの中のリンクの戻り先。コードでログインするので Redirect URLs は要らない）
+
+Supabase の標準のメール送信は1時間に数通までしか送れない。部員が一度にログインして「メールを送りすぎました」と出たら、しばらく待つか、SMTP を設定する。
 
 ## キーの置き場所
 

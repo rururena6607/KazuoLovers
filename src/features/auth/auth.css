@@ -1,0 +1,55 @@
+/* ログイン画面。色は app/theme.css の変数を使う。 */
+.login {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 48px 16px;
+}
+.login h1 {
+  font-size: 1.5rem;
+}
+.login form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.login p {
+  color: var(--mute);
+}
+.login input {
+  font-size: 1rem; /* 16px 未満だと iPhone が拡大する */
+  padding: 12px;
+  border: 1px solid var(--mute);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.login button[type='submit'] {
+  margin-top: 8px;
+  padding: 14px;
+  font-size: 1rem;
+  font-weight: bold;
+  /* ダークモードでは背景と色が近いので、枠で見分ける */
+  border: 1px solid var(--mute);
+  border-radius: 8px;
+  background: var(--navy);
+  color: #fff;
+}
+.login button:disabled {
+  opacity: 0.6;
+}
+.login-links {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.login-link {
+  padding: 8px 0;
+  font-size: 0.9rem;
+  border: none;
+  background: none;
+  color: var(--ink);
+  text-decoration: underline;
+}
+.login .login-error {
+  color: #c62828;
+}
