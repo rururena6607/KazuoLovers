@@ -1,3 +1,12 @@
-export { attackStatsOf, receptionStatsOf, receptionStatsOfResults, serveStatsOf } from './metrics.ts'
+export {
+  attackStatsOf,
+  breakRateOf,
+  breakRateOfStats,
+  excellentRateOf,
+  percent,
+  receptionStatsOf,
+  receptionStatsOfResults,
+  serveStatsOf,
+} from './metrics.ts'
 export * from './aggregate.ts'
 export * from './aiSummary.ts'
