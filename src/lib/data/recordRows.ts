@@ -219,6 +219,20 @@ export function pointFromRow(r: PointRow): PointRecord {
   }
 }
 
+/** テーブルの行を記録に戻す（Realtime で届いた行に使う） */
+export function recordFromRow(table: RecordTable, row: RecordRow): AnyRecord {
+  switch (table) {
+    case 'serves':
+      return serveFromRow(row as ServeRow)
+    case 'receptions':
+      return receptionFromRow(row as ReceptionRow)
+    case 'attacks':
+      return attackFromRow(row as AttackRow)
+    case 'points':
+      return pointFromRow(row as PointRow)
+  }
+}
+
 export const emptySetRecords = (setId: string): SetRecords => ({
   setId,
   serves: [],

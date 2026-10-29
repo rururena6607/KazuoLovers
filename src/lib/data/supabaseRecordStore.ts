@@ -9,11 +9,13 @@ import {
   attackFromRow,
   pointFromRow,
   receptionFromRow,
+  recordFromRow,
   serveFromRow,
   toRow,
   type AttackRow,
   type PointRow,
   type ReceptionRow,
+  type RecordRow,
   type RecordTable,
   type ServeRow,
 } from './recordRows.ts'
@@ -70,6 +72,39 @@ export function createSupabaseRecordStore(getClient: () => SupabaseClient): Remo
         receptions: receptions.map(receptionFromRow),
         attacks: attacks.map(attackFromRow),
         points: points.map(pointFromRow),
+      }
+    },
+    watch(matchId, setIds, { onRecord, onReload }) {
+      const client = getClient()
+      const channel = client.channel(`records:${matchId}:${crypto.randomUUID()}`)
+      // in の絞り込みは 100 件まで。1試合は5セットまでなので足りる
+      const filter = `set_id=in.(${setIds.join(',')})`
+      for (const table of ALL_TABLES) {
+        if (setIds.length > 0) {
+          for (const event of ['INSERT', 'UPDATE'] as const) {
+            channel.on('postgres_changes', { event, schema: 'public', table, filter }, (payload) =>
+              onRecord(recordFromRow(table, payload.new as RecordRow)),
+            )
+          }
+        }
+        // 消したときは RLS により id しか届かず（client_id が分からない）、絞り込みもできないので読み直す
+        channel.on('postgres_changes', { event: 'DELETE', schema: 'public', table }, onReload)
+      }
+      // ほかの端末で次のセットを作った
+      channel.on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'sets', filter: `match_id=eq.${matchId}` },
+        onReload,
+      )
+      // 電波が切れてつなぎ直したら、そのあいだの変更を取りこぼしているので読み直す
+      let joined = false
+      channel.subscribe((status) => {
+        if (status !== 'SUBSCRIBED') return
+        if (joined) onReload()
+        joined = true
+      })
+      return () => {
+        void client.removeChannel(channel)
       }
     },
     async listSetIds(matchId) {
