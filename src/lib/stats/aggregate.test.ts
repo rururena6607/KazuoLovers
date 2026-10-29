@@ -7,23 +7,34 @@ import type {
 } from '../../contracts/index.ts'
 import {
   attackStatsByPlayer,
+  isBackAttack,
   attackStatsByPrevReception,
   attackStatsByRow,
   attackStatsByType,
   opponentReceptionStatsByPlayer,
-  practiceStatsByPlayer,
-  practiceStatsByTargetZone,
-  practiceStatsOf,
+  practiceStatsByGroup as practiceStatsByGroupWith,
+  practiceStatsByPlayer as practiceStatsByPlayerWith,
+  practiceStatsByTargetZone as practiceStatsByTargetZoneWith,
+  practiceStatsOf as practiceStatsOfWith,
   receptionStatsByOppServeType,
   receptionStatsByPlayer,
-  receptionStatsByZone,
-  serveStatsByFromZone,
-  serveStatsByLandingZone,
+  receptionStatsByZone as receptionStatsByZoneWith,
+  serveStatsByFromZone as serveStatsByFromZoneWith,
+  serveStatsByLandingZone as serveStatsByLandingZoneWith,
   serveStatsByPlayer,
   serveStatsByType,
   summaryByGroup,
   summaryBySet,
 } from './aggregate.ts'
+import { zoneOf } from '../court/index.ts'
+
+// 集計は ZoneOf を引数で受け取る（lib/stats は lib/court に依存しない）。テストでは本物の zoneOf を渡す
+const serveStatsByFromZone = (s: readonly ServeRecord[]) => serveStatsByFromZoneWith(s, zoneOf)
+const serveStatsByLandingZone = (s: readonly ServeRecord[]) => serveStatsByLandingZoneWith(s, zoneOf)
+const receptionStatsByZone = (r: readonly ReceptionRecord[]) => receptionStatsByZoneWith(r, zoneOf)
+const practiceStatsOf = (s: readonly ServeRecord[]) => practiceStatsOfWith(s, zoneOf)
+const practiceStatsByPlayer = (s: readonly ServeRecord[]) => practiceStatsByPlayerWith(s, zoneOf)
+const practiceStatsByTargetZone = (s: readonly ServeRecord[]) => practiceStatsByTargetZoneWith(s, zoneOf)
 
 const serve = (o: Partial<ServeRecord> = {}): ServeRecord => ({
   kind: 'serve',
@@ -117,6 +128,19 @@ describe('サーブの集計', () => {
     expect([...by.values()].reduce((n, s) => n + s.attempts, 0)).toBe(4)
   })
 
+  it('打つ位置別：並びは 5・6・1 で固定し、記録がなくても 3 つ返す', () => {
+    const only1 = serveStatsByFromZone([serve({ fromX: 0.9 })])
+    expect([...only1.keys()]).toEqual([5, 6, 1])
+    expect(only1.get(5)).toMatchObject({ attempts: 0, efficiency: null })
+    const reversed = serveStatsByFromZone([serve({ fromX: 0.9 }), serve({ fromX: 0.1 })])
+    expect([...reversed.keys()]).toEqual([5, 6, 1])
+  })
+
+  it('サーブの種類別：並びは種類の決まった順（記録の順ではない）', () => {
+    const forward = serveStatsByType([serve({ serveType: 'other' }), serve({ serveType: 'float' }), serve({ serveType: 'jump' })])
+    expect([...forward.keys()]).toEqual(['float', 'jump', 'other'])
+  })
+
   it('着弾ゾーン別：6 ゾーンすべてを返し、アウトとネットは入れない', () => {
     const by = serveStatsByLandingZone([
       serve({ toX: 0.1, toY: 0.1, reception: 'C' }), // ゾーン 2
@@ -205,19 +229,22 @@ describe('アタックの集計', () => {
     expect(by.get('p2')?.killRate).toBe(50)
   })
 
-  it('攻撃の種類別：種類なしは入れない', () => {
+  it('攻撃の種類別：種類なしは入れない。並びは種類の決まった順（記録の順ではない）', () => {
     const by = attackStatsByType(attacks)
     expect(by.get('left')?.attempts).toBe(2)
     expect(by.get('center')?.efficiency).toBe(-100)
     expect(by.get('back')?.killRate).toBe(100)
-    expect(by.size).toBe(3)
+    expect([...by.keys()]).toEqual(['left', 'center', 'back'])
+    expect([...attackStatsByType([...attacks].reverse()).keys()]).toEqual(['left', 'center', 'back'])
   })
 
-  it('前のレシーブの評価別：切り返しは入れない', () => {
+  it('前のレシーブの評価別：A〜D の順に 0 本でも返し、切り返しは入れない', () => {
     const by = attackStatsByPrevReception(attacks)
+    expect([...by.keys()]).toEqual(['A', 'B', 'C', 'D'])
     expect(by.get('A')?.killRate).toBe(50)
     expect(by.get('C')?.killRate).toBe(0)
-    expect(by.size).toBe(2)
+    expect(by.get('B')?.attempts).toBe(0)
+    expect(by.get('D')?.killRate).toBeNull()
   })
 
   it('前衛とバックアタック', () => {
@@ -225,6 +252,14 @@ describe('アタックの集計', () => {
     expect(row.back).toMatchObject({ attempts: 2, kills: 1 })
     expect(row.back.killRate).toBe(50)
     expect(row.front.attempts).toBe(3)
+  })
+
+  it('バックアタックは isBack か種類「バック」のどちらかが付いていれば数える（種類別と本数が合う）', () => {
+    expect(isBackAttack(attack({ isBack: true, attackType: null }))).toBe(true)
+    expect(isBackAttack(attack({ isBack: false, attackType: 'back' }))).toBe(true)
+    expect(isBackAttack(attack({ isBack: false, attackType: 'left' }))).toBe(false)
+    const mixed = [attack({ attackType: 'back' }), attack({ isBack: true })]
+    expect(attackStatsByRow(mixed).back.attempts).toBe(2)
   })
 })
 
@@ -239,14 +274,36 @@ describe('練習の集計', () => {
 
   it('成功率とゾーン的中率', () => {
     const stats = practiceStatsOf(serves)
-    expect(stats).toMatchObject({ attempts: 5, successes: 4, targeted: 4, zoneHits: 1 })
+    expect(stats).toMatchObject({ attempts: 5, successes: 4, zoneHits: 1 })
     expect(stats.successRate).toBe(80)
-    expect(stats.zoneHitRate).toBe(25)
+    // 要件定義書 5 章：狙ったゾーンに入った本数 ÷ 本数（5 本中 1 本）
+    expect(stats.zoneHitRate).toBe(20)
+  })
+
+  it('ミスは、着弾がコート図の狙ったゾーンの中でも的中に数えない', () => {
+    const miss = serve({ targetZone: 5, result: 'miss', reception: null, missType: 'other', toX: 0.9, toY: 0.9 })
+    const stats = practiceStatsOf([miss])
+    expect(stats).toMatchObject({ successes: 0, zoneHits: 0 })
+    expect(stats.zoneHitRate).toBe(0)
+  })
+
+  it('日ごとの推移：練習のサーブは成功率と的中率で出す（サーブ効果率にしない）', () => {
+    const sets = [
+      { setId: 'd1', serves: serves.slice(0, 2), receptions: [], attacks: [], points: [] },
+      { setId: 'd2', serves: serves.slice(2, 4), receptions: [], attacks: [], points: [] },
+      { setId: 'd3', serves: serves.slice(4), receptions: [], attacks: [], points: [] },
+    ]
+    const day: Record<string, string | null> = { d1: '10/20', d2: '10/21', d3: null }
+    const by = practiceStatsByGroupWith(sets, (set) => day[set.setId] ?? null, zoneOf)
+    expect([...by.keys()]).toEqual(['10/20', '10/21'])
+    expect(by.get('10/20')).toMatchObject({ attempts: 2, successRate: 100, zoneHitRate: 50 })
+    expect(by.get('10/21')).toMatchObject({ attempts: 2, successRate: 50, zoneHitRate: 0 })
   })
 
   it('選手別・狙ったゾーン別', () => {
     expect(practiceStatsByPlayer(serves).get('p1')?.attempts).toBe(5)
     const by = practiceStatsByTargetZone(serves)
+    expect([...by.keys()]).toEqual([1, 2, 3, 4, 5, 6])
     expect(by.get(5)).toMatchObject({ attempts: 3, zoneHits: 1 })
     expect(by.get(5)?.zoneHitRate).toBeCloseTo(100 / 3, 10)
     expect(by.get(1)?.zoneHitRate).toBe(0)

@@ -4,12 +4,15 @@ import { MIN_SAMPLE } from '../../contracts/index.ts'
 /** 率がないとき（打数 0）の表示 */
 export const NO_VALUE = '−'
 
+/** 画面で「−」を付けて出す値か（丸めて 0.0 になる負の値には付けない）。色を変える判定にも使う */
+export const isNegativeShown = (value: number | null): boolean =>
+  value !== null && value < 0 && Math.abs(value).toFixed(1) !== '0.0'
+
 /** 小数第1位までの %。マイナスは「−」（U+2212）。打数 0 の null は「−」 */
 export function formatPercent(value: number | null): string {
   if (value === null) return NO_VALUE
   const text = Math.abs(value).toFixed(1)
-  // 丸めて 0.0 になる負の値に「−」を付けない
-  return value < 0 && text !== '0.0' ? `−${text}%` : `${text}%`
+  return isNegativeShown(value) ? `−${text}%` : `${text}%`
 }
 
 /** 本数が少ない値は「参考値」。MIN_SAMPLE 本未満 */

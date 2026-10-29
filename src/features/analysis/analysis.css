@@ -142,6 +142,10 @@
   border: 2px solid var(--an-line);
   background: color-mix(in srgb, var(--an-heat) calc(var(--heat) * 55%), var(--bg));
 }
+.an-zone-neg {
+  background: color-mix(in srgb, var(--an-neg) calc(var(--heat) * 55%), var(--bg));
+  color: var(--an-neg);
+}
 .an-zone-no {
   position: absolute;
   top: 4px;

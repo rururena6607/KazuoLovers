@@ -1,6 +1,4 @@
-import type { Cell, Metric, Table } from './view.ts'
-
-const cellClass = (c: Cell) => ['an-num', c.reference && 'an-ref', c.negative && 'an-neg'].filter(Boolean).join(' ')
+import { cellClass, type Metric, type Table } from './view.ts'
 
 /** 全体指標。見出しの下に数字を大きく並べる */
 export function MetricRow({ metrics }: { metrics: Metric[] }) {
@@ -38,7 +36,7 @@ export function StatTable({ title, nameHeader, table }: { title: string; nameHea
             </thead>
             <tbody>
               {table.rows.map((row) => (
-                <tr key={row.label}>
+                <tr key={row.id}>
                   <th scope="row">{row.label}</th>
                   {row.cells.map((c, i) => (
                     <td key={i} className={cellClass(c)}>

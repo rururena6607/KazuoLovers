@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToString } from 'react-dom/server'
+import { MIN_SAMPLE } from '../../contracts/index.ts'
 import { AnalysisScreen } from './AnalysisScreen.tsx'
 import type { AnalysisData } from './view.ts'
 
@@ -67,7 +68,7 @@ describe('AnalysisScreen', () => {
   })
 
   it('参考値の説明を出す', () => {
-    expect(html).toContain('10 本未満の参考値')
+    expect(html).toContain(`${MIN_SAMPLE} 本未満の参考値`)
   })
 })
 

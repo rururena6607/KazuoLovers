@@ -197,6 +197,50 @@ describe('playerTable・serveTypeTable', () => {
   })
 })
 
+describe('heatmap：色の濃さとマイナス', () => {
+  const zoneServes = (n: number, toX: number, toY: number, result: ServeRecord['result'], reception: ServeRecord['reception']) =>
+    Array.from({ length: n }, () => serve({ toX, toY, result, reception, missType: result === 'miss' ? 'other' : null }))
+
+  it('値の絶対値の最大を 1 にそろえる（効果率が 10〜30% 程度でも濃淡が出る）', () => {
+    const sets = [
+      {
+        ...empty('s1'),
+        serves: [
+          ...zoneServes(4, 0.1, 0.1, 'in', 'C'), // ゾーン 2：C のみ → 25%
+          ...zoneServes(4, 0.5, 0.1, 'in', 'A'), // ゾーン 3：A のみ → 0%
+          ...zoneServes(2, 0.9, 0.1, 'ace', null), // ゾーン 4：エースのみ → 100%
+        ],
+      },
+    ]
+    const by = new Map(heatmap('serve', sets).cells.map((c) => [c.zone, c]))
+    expect(by.get(4)?.intensity).toBe(1)
+    expect(by.get(2)?.intensity).toBe(0.25)
+    expect(by.get(3)?.intensity).toBe(0)
+  })
+
+  it('マイナスのゾーンは negative で、記録のないゾーンと区別できる', () => {
+    // ゾーン 2 のミスは座標がコート内（着弾がゾーンに入る）で、効果率はマイナス
+    const sets = [{ ...empty('s1'), serves: zoneServes(12, 0.1, 0.1, 'miss', null) }]
+    const by = new Map(heatmap('serve', sets).cells.map((c) => [c.zone, c]))
+    expect(by.get(2)).toMatchObject({ text: '−25.0%（12）', negative: true, reference: false, intensity: 1 })
+    expect(by.get(1)).toMatchObject({ text: '−（0）', negative: false, intensity: 0 })
+  })
+})
+
+describe('表の行の key', () => {
+  it('名簿にない選手が 2 人いても、行の id は重ならない（表示名は同じ「?」）', () => {
+    const sets = [
+      {
+        ...empty('s1'),
+        serves: [serve({ serverId: 'x1' }), serve({ serverId: 'x2' })],
+      },
+    ]
+    const rows = playerTable('serve', sets, []).rows
+    expect(rows.map((r) => r.label)).toEqual(['?', '?'])
+    expect(new Set(rows.map((r) => r.id)).size).toBe(2)
+  })
+})
+
 describe('heatmap', () => {
   it('サーブ：相手コートの 6 ゾーンすべてに値と本数を出す', () => {
     const sets = [
@@ -212,7 +256,7 @@ describe('heatmap', () => {
     expect(h.side).toBe('opponent')
     expect(h.cells.map((c) => c.zone)).toEqual([1, 2, 3, 4, 5, 6])
     const z2 = h.cells.find((c) => c.zone === 2)
-    expect(z2).toMatchObject({ text: '50.0%*（2）', count: 2, reference: true, intensity: 0.5 })
+    expect(z2).toMatchObject({ text: '50.0%*（2）', count: 2, reference: true, negative: false, intensity: 1 })
     expect(h.cells.find((c) => c.zone === 1)).toMatchObject({ text: '−（0）', intensity: 0 })
   })
 
@@ -259,6 +303,22 @@ describe('practiceView', () => {
     expect(v.metrics.map((m) => m.cell.text)).toEqual(['3', '66.7%*', '33.3%*'])
     expect(v.table.rows[0]?.label).toBe('7 渡辺')
     expect(v.heatmap.cells.find((c) => c.zone === 5)?.text).toBe('33.3%*（3）')
+  })
+})
+
+describe('scopeOptions：並び', () => {
+  it('試合は日付順、セットは試合の日付順にセット番号順（読み込み順に依らない）', () => {
+    const shuffled: AnalysisData = {
+      ...data,
+      matches: [...data.matches].reverse(),
+      gameSets: [...data.gameSets].reverse(),
+    }
+    expect(scopeOptions('match', shuffled).map((o) => o.value)).toEqual(['m1', 'm2'])
+    expect(scopeOptions('set', shuffled).map((o) => o.label)).toEqual([
+      '2026-10-20 A高校 第1セット',
+      '2026-10-20 A高校 第2セット',
+      '2026-10-25 B高校 第1セット',
+    ])
   })
 })
 
