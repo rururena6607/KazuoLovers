@@ -1,3 +1,4 @@
+import { cellClass } from './view.ts'
 import type { SetResultTable, TrendRow } from './setResults.ts'
 
 /** セット別の結果の表。セットの行をタップすると、そのセットの分析を開く */
@@ -31,7 +32,7 @@ export function SetResults({ table, onSelect }: { table: SetResultTable; onSelec
                   </th>
                   <td className={row.won === false ? 'an-num an-neg' : 'an-num'}>{row.score}</td>
                   {row.cells.map((c, i) => (
-                    <td key={i} className={['an-num', c.reference && 'an-ref'].filter(Boolean).join(' ')}>
+                    <td key={i} className={cellClass(c)}>
                       {c.text}
                     </td>
                   ))}
@@ -55,7 +56,7 @@ export function ScoreTrend({ rows }: { rows: TrendRow[] }) {
       ) : (
         <ol className="an-trend">
           {rows.map((r) => (
-            <li key={r.no} className={r.side === 'us' ? 'an-trend-us' : 'an-trend-opp'}>
+            <li key={r.id} className={r.side === 'us' ? 'an-trend-us' : 'an-trend-opp'}>
               <span className="an-trend-no">{`${r.no}点目`}</span>
               <span className="an-num an-trend-score">{r.score}</span>
               <span>

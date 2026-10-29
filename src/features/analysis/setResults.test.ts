@@ -7,7 +7,7 @@ import type {
   ServeRecord,
   SetRecords,
 } from '../../contracts/index.ts'
-import { scoreTrend, setResults, setScoreOf } from './setResults.ts'
+import { scoreTrend, setPointsOf, setResults, setScoreOf } from './setResults.ts'
 import type { AnalysisData } from './view.ts'
 
 const players: Player[] = [
@@ -68,15 +68,28 @@ const gameSet = (id: string, setNo: number, our = 0, opp = 0): GameSet => ({
 const empty = (setId: string): SetRecords => ({ setId, serves: [], receptions: [], attacks: [], points: [] })
 
 describe('setScoreOf', () => {
-  it('得点の記録があれば最後の1点のあとの得点（記録の順番に関係なく）', () => {
+  it('得点の記録があれば side ごとに数える（保存された ourScore・oppScore は使わない）', () => {
+    // 自 1-0、相 1-1、自 2-1 のあとに相手側の最後の得点を消した（−1）。あとの記録の値は古いまま
     const set = {
       ...empty('s1'),
-      points: [point(2, { ourScore: 2, oppScore: 0 }), point(1, { ourScore: 1, oppScore: 0 })],
+      points: [
+        point(1, { side: 'us', ourScore: 1, oppScore: 0 }),
+        point(3, { side: 'us', ourScore: 2, oppScore: 1 }),
+      ],
     }
     expect(setScoreOf(set, gameSet('s1', 1, 9, 9))).toEqual({ our: 2, opp: 0 })
   })
   it('なければセットに保存された得点', () => {
     expect(setScoreOf(empty('s1'), gameSet('s1', 1, 25, 22))).toEqual({ our: 25, opp: 22 })
+  })
+})
+
+describe('setPointsOf', () => {
+  it('5 セット目は FINAL_SET_POINTS、それ以外は試合の点数。正の整数でなければ初期値', () => {
+    expect(setPointsOf(5, 25)).toBe(15)
+    expect(setPointsOf(3, 21)).toBe(21)
+    expect(setPointsOf(1, 0)).toBe(25)
+    expect(setPointsOf(1, Number.NaN)).toBe(25)
   })
 })
 
@@ -101,14 +114,15 @@ describe('setResults', () => {
     ],
   }
 
-  it('セット番号順に、得点と指標と、ミス数（サーブミス＋アタックの失点）を並べる', () => {
+  it('セット番号順に、得点と指標と、ミス数（サーブミス＋アタックのミス）を並べる', () => {
     const t = setResults('m1', data)
     expect(t.columns).toEqual(['サーブ効果率', 'サーブレシーブ成功率', 'アタック決定率', 'ミス数'])
     expect(t.rows.map((r) => [r.setNo, r.score, r.won])).toEqual([
       [1, '25-22', true],
       [2, '20-25', false],
     ])
-    expect(t.rows[0]?.cells.map((c) => c.text)).toEqual(['25.0%*', '−', '50.0%*', '2'])
+    // ミス数：サーブミス 1。被ブロックはミスに入れない
+    expect(t.rows[0]?.cells.map((c) => c.text)).toEqual(['25.0%*', '−', '50.0%*', '1'])
   })
 
   it('記録がないセットは本数 0 で出す。ほかの試合のセットは入れない', () => {
@@ -120,6 +134,23 @@ describe('setResults', () => {
   it('同点のセット（途中）は勝ち負けなし', () => {
     const t = setResults('m1', { ...data, gameSets: [gameSet('s1', 1, 3, 3)], records: [] })
     expect(t.rows[0]?.won).toBeNull()
+  })
+
+  it('途中のセットは、点数が上でも下でも勝ち負けなし（8-10 を負けにしない）。終わったら勝ち負け', () => {
+    const row = (our: number, opp: number, setNo = 1) =>
+      setResults('m1', { ...data, gameSets: [gameSet('s1', setNo, our, opp)], records: [] }).rows[0]
+    expect(row(8, 10)?.won).toBeNull()
+    expect(row(24, 20)?.won).toBeNull()
+    expect(row(25, 24)?.won).toBeNull()
+    expect(row(25, 23)?.won).toBe(true)
+    expect(row(23, 25)?.won).toBe(false)
+    // 5 セット目は 15 点
+    expect(row(15, 13, 5)?.won).toBe(true)
+    expect(row(15, 13, 1)?.won).toBeNull()
+  })
+
+  it('試合に 1 セットも記録がなくても、セットの行は出る（emptySet）', () => {
+    expect(setResults('m1', { ...data, records: [] }).rows).toHaveLength(2)
   })
 })
 
@@ -150,13 +181,32 @@ describe('scoreTrend', () => {
     ],
   }
 
-  it('何点目に、誰の何で得点・失点したかを順に並べる', () => {
+  it('何点目に、誰の何で得点・失点したかを順に並べる（得点は side を数えて出す）', () => {
     expect(scoreTrend(set, players)).toEqual([
-      { no: 1, score: '1-0', side: 'us', text: '7 渡辺 サービスエース' },
-      { no: 2, score: '1-1', side: 'opp', text: '3 佐藤 被エース' },
-      { no: 3, score: '1-2', side: 'opp', text: '3 佐藤 被ブロック' },
-      { no: 4, score: '2-2', side: 'us', text: 'ラリー' },
+      { id: 'pt1', no: 1, score: '1-0', side: 'us', text: '7 渡辺 サービスエース' },
+      { id: 'pt2', no: 2, score: '1-1', side: 'opp', text: '3 佐藤 被エース' },
+      { id: 'pt3', no: 3, score: '1-2', side: 'opp', text: '3 佐藤 被ブロック' },
+      { id: 'pt4', no: 4, score: '2-2', side: 'us', text: 'ラリー' },
     ])
+  })
+
+  it('−1 で途中の得点が消えても、番号は 1 から続き、点数は残った得点を数える', () => {
+    // 自 1-0、相 1-1、自 2-1 のうち、相手の得点（pt2）を消した。残りの記録には古い点数が入っている
+    const removed: SetRecords = {
+      ...empty('s1'),
+      points: [
+        point(1, { side: 'us', ourScore: 1, oppScore: 0 }),
+        point(3, { side: 'us', ourScore: 2, oppScore: 1 }),
+        point(4, { side: 'opp', ourScore: 2, oppScore: 2 }),
+      ],
+    }
+    const rows = scoreTrend(removed, players)
+    expect(rows.map((r) => [r.no, r.score])).toEqual([
+      [1, '1-0'],
+      [2, '2-0'],
+      [3, '2-1'],
+    ])
+    expect(new Set(rows.map((r) => r.id)).size).toBe(3)
   })
 
   it('元の記録が見つからない・選手がいない原因は理由だけ', () => {
