@@ -90,6 +90,28 @@ button {
   color: var(--on-selected);
 }
 
+/* 枠線つきのボタン。選択中は aria-pressed か aria-current で塗る */
+.btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border: var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  cursor: pointer;
+}
+.btn:active {
+  background: var(--line-soft);
+}
+.btn[aria-pressed='true'],
+.btn[aria-current] {
+  background: var(--selected);
+  color: var(--on-selected);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 /* 上部のお知らせ（更新・インストールの案内） */
 .banner {
   display: flex;
