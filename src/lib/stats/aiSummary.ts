@@ -2,7 +2,7 @@
 // 送るのは背番号と数値だけ。選手の名前・チーム名・学校名・日付は入れない（外部 AI に送る前提）。
 // 各値には本数を添え、MIN_SAMPLE 本未満には reference を付ける（本数が少ない項目は断定しないよう AI に指示するため）。
 // 率は小数第1位に丸める（外部に出す値で、集計の途中ではない。丸め方は画面の toFixed(1) と同じ）。
-// 渡す記録は試合のものだけにする（練習は metrics.ts の前提と同じ理由で混ぜない）。
+// 練習のサーブ（targetZone がある）は、受けた評価がなくサーブ効果率が低く出るので、ここで除く（metrics.ts の前提と同じ）。
 import {
   MIN_SAMPLE,
   type AttackStats,
@@ -162,8 +162,13 @@ function byRoster<T, V>(
   return { rows, unassigned }
 }
 
+/** 試合のサーブか。練習のサーブは狙ったゾーンが入っている（contracts の ServeRecord.targetZone） */
+const isMatchServe = (s: { targetZone: number | null }): boolean => s.targetZone === null
+
 export function buildAiSummary(input: AiSummaryInput, zoneOf: ZoneOf): AiSummary {
-  const sets = [...input.sets].sort((a, b) => a.matchNo - b.matchNo || a.setNo - b.setNo)
+  const sets = input.sets
+    .map((s) => ({ ...s, records: { ...s.records, serves: s.records.serves.filter(isMatchServe) } }))
+    .sort((a, b) => a.matchNo - b.matchNo || a.setNo - b.setNo)
   const serves = sets.flatMap((s) => s.records.serves)
   const receptions = sets.flatMap((s) => s.records.receptions)
   const attacks = sets.flatMap((s) => s.records.attacks)

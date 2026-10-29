@@ -278,6 +278,34 @@ describe('buildAiSummary', () => {
   })
 })
 
+describe('練習の記録', () => {
+  it('練習のサーブ（targetZone あり）は、打数にも指標にも入れない', () => {
+    // 試合：エース 1・A 1（効果率 50%）。練習：評価のないイン 10 本
+    const mixed = [
+      serve({ result: 'ace', reception: null }),
+      serve({ reception: 'A' }),
+      ...Array.from({ length: 10 }, () => serve({ reception: null, targetZone: 5 })),
+    ]
+    const s = buildAiSummary({
+      players,
+      sets: [{ matchNo: 1, setNo: 1, ourScore: 0, oppScore: 0, records: records('s1', { serves: mixed }) }],
+    })
+    expect(s.serve.total).toMatchObject({ attempts: 2, efficiency: 50 })
+    expect(s.sets[0]?.serve.attempts).toBe(2)
+    expect(s.serve.byPlayer[0]?.attempts).toBe(2)
+    expect(s.serve.unassigned).toBe(0)
+  })
+
+  it('練習のサーブだけなら、サーブは 0 本・率は null（reference は true）', () => {
+    const only = [serve({ reception: null, targetZone: 1 })]
+    const s = buildAiSummary({
+      players,
+      sets: [{ matchNo: 1, setNo: 1, ourScore: 0, oppScore: 0, records: records('s1', { serves: only }) }],
+    })
+    expect(s.serve.total).toEqual({ attempts: 0, efficiency: null, aceRate: null, missRate: null, reference: true })
+  })
+})
+
 describe('個人情報', () => {
   it('JSON に選手の名前・ポジション・id が入らない（背番号と数値だけ）', () => {
     const json = JSON.stringify(buildAiSummary({ players, sets }))
