@@ -113,6 +113,23 @@ npx supabase functions deploy line-webhook --project-ref （プロジェクト�
 3. 部のテスト用のグループに Bot を招待する →「このグループをチームにつなぎました」と返ってくる
 4. 「結果」と送る → 最新の試合の得点が返ってくる（完了条件）。返ってこなければ「Edge Functions → line-webhook → Logs」を見る
 
+## 公式戦後の自動投稿（T-35、line-push）
+
+公式戦が終わったら、結果を部の LINE グループに送る（Push）Edge Function。記録画面で試合を終えたときに `linePush.pushMatchResult(matchId)`（`src/lib/data/linePush.ts`）で呼ぶ。コードは `functions/line-push/`（`line-webhook/logic.ts` も使う）。
+
+- **公式戦**は、大会名のある試合とする。練習試合は大会名を空にして作る
+- 同じ試合は1回しか送らない（`matches.line_pushed_at`。`migrations/20261029010000_line_pushed_at.sql` を流しておく）
+- Push は「送った回数 × グループの人数」で数える。送る前に今月の上限・使った通数・グループの人数を LINE に聞き、**足りなければ送らない**（画面に理由を出す。部員はグループで「結果」と送れば見られる）
+- AI のコメントが保存済みなら、それも送る（吹き出しの数は通数に関係しない）
+
+シークレットは line-webhook と同じ（`LINE_CHANNEL_ACCESS_TOKEN`・`LINE_TEAM_ID`）。ログインした部員だけが呼べるよう、JWT の確かめは**オンのまま**配る。
+
+```
+npx supabase functions deploy line-push --project-ref （プロジェクトの ID） --use-api
+```
+
+テストで1回送ったら、LINE Official Account Manager の「利用状況」で、何通と数えられたかを確かめる（要件定義書 11 章の確認事項）。
+
 ## キーの置き場所
 
 | キー | 置く場所 |
