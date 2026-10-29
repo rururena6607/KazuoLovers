@@ -32,6 +32,24 @@ export const DEMO_MATCH: Match = {
   setPoints: 25,
 }
 
+/** 練習モード用の試合（相手なし）と、その1セット */
+export const DEMO_PRACTICE: Match = {
+  id: 'demo-practice',
+  teamId: TEAM,
+  kind: 'practice',
+  opponentId: null,
+  date: '2026-10-29',
+  tournament: null,
+  setPoints: 25,
+}
+export const DEMO_PRACTICE_SET: GameSet = {
+  id: 'demo-practice-set',
+  matchId: DEMO_PRACTICE.id,
+  setNo: 1,
+  ourScore: 0,
+  oppScore: 0,
+}
+
 /** 5セット分を最初から用意しておく（得点は記録から数える） */
 export const DEMO_SETS: readonly GameSet[] = [1, 2, 3, 4, 5].map((setNo) => ({
   id: `demo-set-${setNo}`,
