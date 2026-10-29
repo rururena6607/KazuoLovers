@@ -1,1 +1,1 @@
-export { applyPoint, isSetOver, pointFor, revertPoint, setWinner, toggleServing } from './rally.ts'
+export { applyPoint, applyPointInSet, isSetOver, pointFor, setWinner, toggleServing } from './rally.ts'

@@ -13,9 +13,9 @@ import {
 } from '../../contracts/index.ts'
 import {
   applyPoint,
+  applyPointInSet,
   isSetOver,
   pointFor,
-  revertPoint,
   setWinner,
   toggleServing,
 } from './rally.ts'
@@ -120,17 +120,36 @@ describe('applyPoint', () => {
   })
 })
 
-describe('修正：長押しの −1 とサーブ権の切替', () => {
-  it('−1 はサーブ権を変えない', () => {
-    expect(revertPoint(state(4, 5, 'us'), 'opp')).toEqual(state(4, 4, 'us'))
-    expect(revertPoint(state(4, 5, 'opp'), 'us')).toEqual(state(3, 5, 'opp'))
-  })
-  it('0 点から −1 しても 0 のまま', () => {
-    expect(revertPoint(state(0, 0, 'us'), 'us')).toEqual(state(0, 0, 'us'))
-  })
-  it('サーブ権を切り替える', () => {
-    expect(toggleServing(state(1, 1, 'us')).serving).toBe('opp')
+describe('サーブ権の切替', () => {
+  it('サーブ権を切り替える。もとの状態は書き換えない', () => {
+    const s = state(1, 1, 'us')
+    expect(toggleServing(s)).toEqual(state(1, 1, 'opp'))
     expect(toggleServing(state(1, 1, 'opp')).serving).toBe('us')
+    expect(s).toEqual(state(1, 1, 'us'))
+  })
+})
+
+describe('練習モードのサーブには得点がない', () => {
+  it.each(['ace', 'miss', 'in'] as const)('狙ったゾーンがあるサーブ（%s）は null', (result) => {
+    expect(pointFor({ ...serve(result), targetZone: 5 })).toBeNull()
+  })
+})
+
+describe('applyPointInSet', () => {
+  it('セット中は得点を足す', () => {
+    expect(applyPointInSet(state(24, 23, 'opp'), 'us', DEFAULT_SET_POINTS)).toEqual(state(25, 23, 'us'))
+  })
+  it('セットが終わっていれば、状態を変えずに返す（25-23 のあとに 26-23 を作らない）', () => {
+    const over = state(25, 23, 'us')
+    expect(applyPointInSet(over, 'us', DEFAULT_SET_POINTS)).toBe(over)
+    expect(applyPointInSet(over, 'opp', DEFAULT_SET_POINTS)).toBe(over)
+  })
+})
+
+describe('セットの点数の検証', () => {
+  it.each([0, -1, 25.5, Number.NaN, Number.POSITIVE_INFINITY])('%s は例外', (points) => {
+    expect(() => isSetOver(state(0, 0, 'us'), points)).toThrow(RangeError)
+    expect(() => setWinner(state(2, 0, 'us'), points)).toThrow(RangeError)
   })
 })
 
@@ -148,7 +167,8 @@ describe('isSetOver・setWinner', () => {
     expect(isSetOver(state(26, 25, 'us'), DEFAULT_SET_POINTS)).toBe(false)
     expect(isSetOver(state(26, 24, 'us'), DEFAULT_SET_POINTS)).toBe(true)
   })
-  it('デュースが長引いても2点差で終了（30-28）', () => {
+  it('デュースが長引いても2点差で終了（30-28 は自チーム、28-30 は相手）', () => {
+    expect(setWinner(state(30, 28, 'us'), DEFAULT_SET_POINTS)).toBe('us')
     expect(setWinner(state(28, 30, 'opp'), DEFAULT_SET_POINTS)).toBe('opp')
   })
   it('点数に達する前は、点差があっても続く（24-0）', () => {
