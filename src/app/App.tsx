@@ -33,7 +33,7 @@ export default function App() {
       <UpdatePrompt pending={pending} />
       <InstallGuide />
       <main className="app-main">
-        {tab === 'record' && <RecordScreen repo={repo} />}
+        {tab === 'record' && <RecordScreen repo={repo} pending={pending} />}
         {tab === 'analysis' && <Placeholder title="分析" task="T-21" />}
         {tab === 'admin' && <Placeholder title="管理" task="T-10" />}
       </main>
