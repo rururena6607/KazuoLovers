@@ -72,6 +72,47 @@ SMTP を保存すると、「Authentication → Emails → Templates」の件名
 - 「Authentication → Logs」で、SMTP のエラー（パスワードの間違いなど）が出ていないか見る
 - 「メールを送りすぎました」と出たら、「Authentication → Rate Limits」の1時間あたりのメールの上限を確かめる。部員が一度にログインする日は、上限を上げておく
 
+## LINE の返信（T-33、line-webhook）
+
+部の LINE グループで「結果」「7番」「ヘルプ」と送ると、Bot が返信する Edge Function。コードは `functions/line-webhook/`（`index.ts` と `logic.ts`）。返信（Reply）なので、月 200 通の無料枠を使わない。
+
+- 署名（`x-line-signature`）を確かめ、LINE からのリクエストだけを受け付ける
+- Bot をグループに招待すると、そのグループを `LINE_TEAM_ID` のチームにつなぐ（`teams.line_group_id`）。**つなげるのは最初の1グループだけ**で、ほかのグループに招待されてもチームのデータは返さない。つなぎ直すときは Table Editor で `teams.line_group_id` を空にしてから招待し直す
+- 「結果」：最新の試合（練習は除く）のセットごとの得点と、保存済みの AI コメント（`match:<試合の id>`）。Gemini は待たない
+- 「7番」「#7」：その選手の最新の試合の本数。指標は T-34 で足す
+
+### 1. LINE のチャネルを作る
+
+1. **学校のアドレスで** https://developers.line.biz/console/ に入り、プロバイダーを作る
+2. 「Messaging API」のチャネルを作る（LINE 公式アカウントもできる）
+3. 「チャネル基本設定」の **チャネルシークレット**と、「Messaging API設定」で発行した **チャネルアクセストークン（長期）** を控える。どちらもどこにも貼らない
+4. LINE Official Account Manager の「応答設定」で、**応答メッセージをオフ、Webhook をオン**にする。「アカウント設定」で **グループ・複数人トークへの参加を許可する** をオンにする
+
+### 2. シークレットを入れる
+
+「Edge Functions → Secrets」で、次を足す。
+
+| 名前 | 値 |
+| --- | --- |
+| `LINE_CHANNEL_SECRET` | チャネルシークレット |
+| `LINE_CHANNEL_ACCESS_TOKEN` | チャネルアクセストークン（長期） |
+| `LINE_TEAM_ID` | つなぐチームの id（Table Editor の `teams` の `id`） |
+
+### 3. 配る
+
+LINE は Supabase のログインを持たないので、**JWT の確かめをオフにして**配る（代わりに署名で確かめる）。
+
+```
+npx supabase functions deploy line-webhook --project-ref （プロジェクトの ID） --use-api --no-verify-jwt
+```
+
+### 4. LINE に Webhook の URL を入れる
+
+1. 「Messaging API設定」の **Webhook URL** に `https://（プロジェクトの ID）.supabase.co/functions/v1/line-webhook` を入れる
+2. 「検証」を押して「成功」と出ることを確かめ、**Webhook の利用**をオンにする
+3. 部のテスト用のグループに Bot を招待する →「このグループをチームにつなぎました」と返ってくる
+4. 「結果」と送る → 最新の試合の得点が返ってくる（完了条件）。返ってこなければ「Edge Functions → line-webhook → Logs」を見る
+
 ## キーの置き場所
 
 | キー | 置く場所 |
