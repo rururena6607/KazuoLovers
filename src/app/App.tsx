@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
+import InstallGuide from './InstallGuide.tsx'
 import TabBar from './TabBar.tsx'
 import { TABS, type TabId } from './tabs.ts'
+import UpdatePrompt from './UpdatePrompt.tsx'
 
 // 分析（とりはる）と管理（ひろし）の画面は、できたらここで差し替える。
 function Placeholder({ title, task }: { title: string; task: string }) {
@@ -30,6 +32,9 @@ export default function App() {
   // 入力途中の状態を残すため、画面は描いたまま選択中以外を hidden で隠す
   return (
     <div className="app">
+      {/* 未送信の件数は T-11 で RecordRepository とつなぐ */}
+      <UpdatePrompt pending={0} />
+      <InstallGuide />
       <main className="app-main">
         {TABS.map(({ id }) => (
           <div key={id} hidden={id !== tab}>
