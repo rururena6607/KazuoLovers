@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { MIN_SAMPLE } from '../../contracts/index.ts'
 import './analysis.css'
 import { Heatmap } from './Heatmap.tsx'
 import { MetricRow, StatTable } from './StatTable.tsx'
@@ -42,21 +43,48 @@ function toScope(kind: ScopeKind, target: string): Scope | null {
   }
 }
 
+const EMPTY_MESSAGE = {
+  match: '選べる試合がありません',
+  set: '選べるセットがありません',
+  opponent: '選べる相手がありません',
+} as const
+
+const referenceNote = `* は ${MIN_SAMPLE} 本未満の参考値です。`
+
 /** 分析画面（T-21）。範囲を選び、サーブ・レシーブ・アタックの全体指標、選手別表、ヒートマップを出す */
 export function AnalysisScreen({ data }: { data: AnalysisData }) {
   const [kind, setKind] = useState<ScopeKind>('all')
   const [targets, setTargets] = useState<Partial<Record<ScopeKind, string>>>({})
   const [tab, setTab] = useState<Tab>('serve')
 
-  const options = useMemo(
-    () => (kind === 'match' || kind === 'set' || kind === 'opponent' ? scopeOptions(kind, data) : []),
-    [kind, data],
-  )
+  const pickable = kind === 'match' || kind === 'set' || kind === 'opponent'
+  const options = useMemo(() => (pickable ? scopeOptions(kind, data) : []), [pickable, kind, data])
   // 選択肢が変わっても、選んだものが残っていなければ先頭にする
   const chosen = targets[kind] ?? ''
   const target = options.some((o) => o.value === chosen) ? chosen : (options[0]?.value ?? '')
-  const scope = toScope(kind, target)
-  const sets = useMemo(() => (scope ? recordsInScope(scope, data) : []), [scope, data])
+  // scope は毎回新しいオブジェクトになるので、依存には kind と target を使う
+  const sets = useMemo(() => {
+    const scope = toScope(kind, target)
+    return scope ? recordsInScope(scope, data) : []
+  }, [kind, target, data])
+
+  // タブを切り替えても、範囲の集計はやり直さない。表示用の値は、記録・タブ・選手が変わったときだけ作る
+  const overview = useMemo(
+    () =>
+      kind === 'practice'
+        ? null
+        : {
+            metrics: overallMetrics(tab, sets),
+            heat: tab === 'attack' ? null : heatmap(tab, sets),
+            types: tab === 'serve' ? serveTypeTable(sets) : null,
+            players: playerTable(tab, sets, data.players),
+          },
+    [kind, tab, sets, data.players],
+  )
+  const practice = useMemo(
+    () => (kind === 'practice' ? practiceView(sets, data.players) : null),
+    [kind, sets, data.players],
+  )
 
   return (
     <div className="analysis">
@@ -89,13 +117,18 @@ export function AnalysisScreen({ data }: { data: AnalysisData }) {
           ))}
         </select>
       )}
-      {(kind === 'match' || kind === 'set' || kind === 'opponent') && options.length === 0 && (
-        <p className="an-empty">選べる試合がありません</p>
+      {pickable && options.length === 0 && <p className="an-empty">{EMPTY_MESSAGE[kind]}</p>}
+
+      {practice && (
+        <>
+          <MetricRow metrics={practice.metrics} />
+          <Heatmap map={practice.heatmap} />
+          <StatTable title="選手別" nameHeader="選手" table={practice.table} />
+          <p className="an-note">{`${referenceNote}ゾーンは狙ったゾーン別です。`}</p>
+        </>
       )}
 
-      {kind === 'practice' ? (
-        <PracticePanel data={data} sets={sets} />
-      ) : (
+      {overview && (
         <>
           <div className="an-seg" role="group" aria-label="種類">
             {TABS.map((t) => (
@@ -105,25 +138,13 @@ export function AnalysisScreen({ data }: { data: AnalysisData }) {
             ))}
           </div>
 
-          <MetricRow metrics={overallMetrics(tab, sets)} />
-          {tab !== 'attack' && <Heatmap map={heatmap(tab, sets)} />}
-          {tab === 'serve' && <StatTable title="サーブの種類別" nameHeader="種類" table={serveTypeTable(sets)} />}
-          <StatTable title="選手別" nameHeader="選手" table={playerTable(tab, sets, data.players)} />
-          <p className="an-note">* は 10 本未満の参考値です。</p>
+          <MetricRow metrics={overview.metrics} />
+          {overview.heat && <Heatmap map={overview.heat} />}
+          {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
+          <StatTable title="選手別" nameHeader="選手" table={overview.players} />
+          <p className="an-note">{referenceNote}</p>
         </>
       )}
     </div>
-  )
-}
-
-function PracticePanel({ data, sets }: { data: AnalysisData; sets: ReturnType<typeof recordsInScope> }) {
-  const view = practiceView(sets, data.players)
-  return (
-    <>
-      <MetricRow metrics={view.metrics} />
-      <Heatmap map={view.heatmap} />
-      <StatTable title="選手別" nameHeader="選手" table={view.table} />
-      <p className="an-note">* は 10 本未満の参考値です。ゾーンは狙ったゾーン別です。</p>
-    </>
   )
 }

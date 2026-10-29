@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatPercent, formatRate, formatZoneCell, isReference } from './format.ts'
+import { formatPercent, formatRate, formatZoneCell, isNegativeShown, isReference } from './format.ts'
 
 describe('formatPercent', () => {
   it('小数第1位までの % で出す', () => {
@@ -34,5 +34,15 @@ describe('参考値', () => {
     expect(formatZoneCell(48, 21)).toBe('48.0%（21）')
     expect(formatZoneCell(48, 8)).toBe('48.0%*（8）')
     expect(formatZoneCell(null, 0)).toBe('−（0）')
+  })
+})
+
+describe('isNegativeShown', () => {
+  it('「−」を付けて出す値だけ true（0.0 に丸まる負の値と null は false）', () => {
+    expect(isNegativeShown(-5)).toBe(true)
+    expect(isNegativeShown(-0.04)).toBe(false)
+    expect(isNegativeShown(0)).toBe(false)
+    expect(isNegativeShown(5)).toBe(false)
+    expect(isNegativeShown(null)).toBe(false)
   })
 })
