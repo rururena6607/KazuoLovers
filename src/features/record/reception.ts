@@ -19,11 +19,10 @@ export const emptyReceptionDraft = (): ReceptionDraft => ({
   oppServeType: null,
 })
 
-/** A〜D は受けた選手が要る。被エースは触れていないこともあるので任意 */
-export const needsReceiver = (outcome: ReceptionOutcome): boolean =>
-  outcome !== 'ace' && outcome !== 'opp_miss'
+/** 相手ミス以外は受けた選手が要る（receptions テーブルの制約と同じ。被エースは近くにいた選手） */
+export const needsReceiver = (outcome: ReceptionOutcome): boolean => outcome !== 'opp_miss'
 
-/** 確定した1本。A〜D で受けた選手がいなければ null */
+/** 確定した1本。受けた選手が要るのにいなければ null */
 export function buildReception(
   draft: ReceptionDraft,
   outcome: ReceptionOutcome,

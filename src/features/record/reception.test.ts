@@ -19,11 +19,9 @@ describe('buildReception', () => {
     expect(buildReception(emptyReceptionDraft(), 'A', ids)).toBeNull()
   })
 
-  it('被エースは受けた選手なしでも作れる', () => {
-    expect(buildReception(emptyReceptionDraft(), 'ace', ids)).toMatchObject({
-      result: 'ace',
-      receiverId: null,
-    })
+  it('被エースも受けた選手が要る（テーブルの制約）', () => {
+    expect(buildReception(emptyReceptionDraft(), 'ace', ids)).toBeNull()
+    expect(buildReception(draft, 'ace', ids)).toMatchObject({ result: 'ace', receiverId: 'p12' })
   })
 
   it('A〜D は受けた選手・位置・相手サーバーを残す', () => {
