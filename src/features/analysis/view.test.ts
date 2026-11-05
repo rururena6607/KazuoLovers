@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type {
   AttackRecord,
   GameSet,
+  OppAttackRecord,
+  OppAttackResult,
   Match,
   Opponent,
   Player,
@@ -11,6 +13,7 @@ import type {
 } from '../../contracts/index.ts'
 import {
   courseHeatmap,
+  digView,
   heatmap,
   overallMetrics,
   playerTable,
@@ -438,6 +441,65 @@ describe('speedTable（速さ別。5 章：全体指標と同じ式、速さな�
   it('速さを入れた記録がない・レシーブは null', () => {
     expect(speedTable('serve', [{ ...empty('s1'), serves: [serve()] }])).toBeNull()
     expect(speedTable('reception', [empty('s1')])).toBeNull()
+  })
+})
+
+describe('digView（相手のスパイク。要件定義書 5 章の計算例）', () => {
+  const opp = (result: OppAttackResult, o: Partial<OppAttackRecord> = {}): OppAttackRecord => ({
+    kind: 'opp_attack',
+    clientId: 'c',
+    setId: 's1',
+    hitterId: null,
+    diggerId: null,
+    fromX: null,
+    fromY: null,
+    toX: null,
+    toY: null,
+    speed: null,
+    result,
+    recordedAt: '2026-11-05T00:00:00Z',
+    ...o,
+  })
+  const times = (n: number, r: OppAttackResult): OppAttackRecord[] => Array.from({ length: n }, () => opp(r))
+  // 10 本：A3・B2・C1・拾えず3・相手ミス1 → 拾えた率 6 ÷ 9 × 100 ≒ 66.7%（分母 9 本は 10 本未満なので参考値「*」）
+  const sets: SetRecords[] = [
+    { ...empty('s1'), oppAttacks: [...times(3, 'A'), ...times(2, 'B'), ...times(1, 'C')] },
+    { ...empty('s2'), oppAttacks: [...times(3, 'killed'), ...times(1, 'opp_error')] },
+  ]
+
+  it('本数・拾えた率・拾えず・相手ミスを出す（セットをまたいで合計）', () => {
+    const texts = Object.fromEntries(digView(sets).metrics.map((m) => [m.label, m.cell.text]))
+    expect(texts).toEqual({ 相手のスパイク: '10', 拾えた率: '66.7%*', 拾えず: '3', 相手ミス: '1' })
+  })
+
+  it('拾えた率の分母（拾えた＋拾えず）が 10 本以上なら「*」を付けない', () => {
+    const big: SetRecords[] = [{ ...empty('s1'), oppAttacks: [...times(8, 'A'), ...times(2, 'killed')] }]
+    const cell = digView(big).metrics.find((m) => m.label === '拾えた率')?.cell
+    expect(cell).toEqual({ text: '80.0%', reference: false, negative: false })
+  })
+
+  it('記録がなければ「−」', () => {
+    const v = digView([empty('s1')])
+    expect(v.metrics.find((m) => m.label === '拾えた率')?.cell.text).toBe('−')
+    expect(v.landing.cells.every((c) => c.count === 0)).toBe(true)
+  })
+
+  it('位置の割合：落ちた位置は自コート、打ってくる位置は相手コート', () => {
+    const v = digView([
+      {
+        ...empty('s1'),
+        oppAttacks: [
+          opp('A', { fromX: 0.1, fromY: 0.1, toX: 0.1, toY: 0.9 }),
+          opp('killed', { fromX: 0.1, fromY: 0.1, toX: 0.5, toY: 0.9 }),
+        ],
+      },
+    ])
+    expect(v.landing.side).toBe('own')
+    expect(v.origin.side).toBe('opponent')
+    const text = (h: typeof v.landing, zone: number) => h.cells.find((c) => c.zone === zone)?.text
+    expect(text(v.landing, 5)).toBe('50.0%*（1）')
+    expect(text(v.landing, 6)).toBe('50.0%*（1）')
+    expect(text(v.origin, 2)).toBe('100.0%*（2）')
   })
 })
 

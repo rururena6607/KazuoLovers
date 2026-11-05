@@ -17,6 +17,9 @@ import {
   attackStatsByPlayer,
   attackStatsBySpeed,
   attackStatsOf,
+  digLandingShare,
+  digOriginShare,
+  digStatsOf,
   practiceStatsByPlayer,
   practiceStatsByTargetZone,
   practiceStatsOf,
@@ -387,6 +390,45 @@ export const COURSE_NOTES = {
   serve: 'コース割合は、着弾点を記録したサーブに対する割合です（コートの外のアウトは含み、ネットは除く）。',
   reception: 'コース割合は、受けた位置を記録したレシーブに対する割合です。',
 } as const
+
+// ---- 相手のスパイク（F-25） ----
+
+export interface DigView {
+  /** 本数・拾えた率・拾えず・相手ミス */
+  metrics: Metric[]
+  /** 落ちた位置の割合（自コート） */
+  landing: Heatmap
+  /** 打ってくる位置の割合（相手コート） */
+  origin: Heatmap
+}
+
+/**
+ * 相手のスパイクの分析（要件定義書 5 章「相手のスパイク」）。
+ * 拾えた率 = 拾えた（A〜D）÷（拾えた ＋ 拾えず）。相手ミスは分母に入れない（分母の本数が 10 本未満なら「*」）。
+ * 位置の割合は、位置を記録した本数に対するそのゾーンの割合
+ */
+export function digView(sets: readonly SetRecords[]): DigView {
+  const records = sets.flatMap((s) => s.oppAttacks ?? [])
+  const stats = digStatsOf(records)
+  const landing = digLandingShare(records, zoneOf)
+  const origin = digOriginShare(records, zoneOf)
+  const toValues = (share: typeof landing): ZoneValue[] =>
+    [...share.zones].map(([zone, z]) => ({ zone, value: z.share, count: z.count }))
+  return {
+    metrics: [
+      { label: '相手のスパイク', cell: countCell(stats.total) },
+      { label: '拾えた率', cell: rateCell(stats.digRate, stats.dug + stats.killed) },
+      { label: '拾えず', cell: countCell(stats.killed) },
+      { label: '相手ミス', cell: countCell(stats.oppError) },
+    ],
+    landing: makeHeatmap('own', '落ちた位置の割合', toValues(landing)),
+    origin: makeHeatmap('opponent', '打ってくる位置の割合', toValues(origin)),
+  }
+}
+
+/** 相手のスパイクの分母の説明（画面の注） */
+export const DIG_NOTE =
+  '拾えた率は、拾えた（A〜D）÷（拾えた＋拾えず）です（相手ミスは含めません）。位置の割合は、位置を記録したスパイクに対する割合です。'
 
 // ---- 練習 ----
 
