@@ -1,0 +1,71 @@
+// 記録画面が試合を開くための MatchRepository（contracts、#36）のデモ版と、MatchContext を手元で直す関数。
+// 本物は lib/data の teamData（ひろし、T-10）。キーがない手元ではデモ（下の createDemoMatchSource）を使う。
+import type { GameSet, MatchRepository, OpponentPlayer } from '../../contracts/index.ts'
+import {
+  DEMO_MATCH,
+  DEMO_OPPONENT,
+  DEMO_OPP_PLAYERS,
+  DEMO_PLAYERS,
+  DEMO_PRACTICE,
+  DEMO_PRACTICE_SET,
+  DEMO_SETS,
+} from './demo.ts'
+
+/** 足した背番号を、背番号の順に入れる（同じ選手なら入れない） */
+export const withOppPlayer = (list: readonly OpponentPlayer[], p: OpponentPlayer): OpponentPlayer[] =>
+  list.some((o) => o.id === p.id) ? [...list] : [...list, p].sort((a, b) => a.number - b.number)
+
+/** 作ったセットを、セットの番号の順に入れる（同じセットなら入れない） */
+export const withSet = (sets: readonly GameSet[], s: GameSet): GameSet[] =>
+  sets.some((x) => x.id === s.id) ? [...sets] : [...sets, s].sort((a, b) => a.setNo - b.setNo)
+
+/** 相手の背番号として受け付けるか（0〜99 の整数）。受け付けなければ null */
+export const parseOppNumber = (text: string): number | null => {
+  const t = text.trim()
+  return /^\d{1,2}$/.test(t) ? Number(t) : null
+}
+
+/**
+ * デモの試合と練習。セットは本物と同じく、第1セットから1つずつ増える。
+ * フェイクの RecordRepository には5セット分の id を先に渡しておく（app/backend.ts）
+ */
+export function createDemoMatchSource(): MatchRepository {
+  let setCount = 1
+  let oppPlayers: OpponentPlayer[] = [...DEMO_OPP_PLAYERS]
+
+  return {
+    loadMatch: (matchId) => {
+      const players = [...DEMO_PLAYERS]
+      if (matchId === DEMO_PRACTICE.id) {
+        return Promise.resolve({
+          match: DEMO_PRACTICE,
+          opponent: null,
+          sets: [DEMO_PRACTICE_SET],
+          players,
+          opponentPlayers: [],
+        })
+      }
+      if (matchId !== DEMO_MATCH.id) return Promise.reject(new Error('試合が見つかりませんでした。'))
+      return Promise.resolve({
+        match: DEMO_MATCH,
+        opponent: DEMO_OPPONENT,
+        sets: DEMO_SETS.slice(0, setCount),
+        players,
+        opponentPlayers: [...oppPlayers],
+      })
+    },
+    addOpponentPlayer: (opponentId, number) => {
+      const found = oppPlayers.find((o) => o.number === number)
+      if (found) return Promise.resolve(found)
+      const added: OpponentPlayer = { id: `o${number}`, opponentId, number }
+      oppPlayers = [...oppPlayers, added].sort((a, b) => a.number - b.number)
+      return Promise.resolve(added)
+    },
+    createNextSet: () => {
+      const next = DEMO_SETS[setCount]
+      if (!next) return Promise.reject(new Error('これ以上セットを作れません（5セットまで）。'))
+      setCount += 1
+      return Promise.resolve(next)
+    },
+  }
+}

@@ -3,12 +3,12 @@ import Court from '../../components/Court.tsx'
 import { allZones, zoneColor } from '../../components/courtGeometry.ts'
 import {
   MIN_SAMPLE,
+  type MatchContext,
   type RecordRepository,
   type ServeRecord,
   type ServeType,
 } from '../../contracts/index.ts'
 import { zoneOf } from '../../lib/court/index.ts'
-import { DEMO_PLAYERS, DEMO_PRACTICE, DEMO_PRACTICE_SET } from '../record/demo.ts'
 import { newIds } from '../record/ids.ts'
 import { SERVE_TYPES, playerLabel, toggle } from '../record/labels.ts'
 import { useMatchRecords } from '../record/useMatchRecords.ts'
@@ -19,7 +19,11 @@ import { practiceSummary } from './summary.ts'
 
 interface Props {
   repo: RecordRepository
+  /** 開いている練習（kind が practice の試合）。セットは1つだけ使う */
+  ctx: MatchContext
   onExit: () => void
+  /** 閉じるボタンの文字（デモは「試合の記録に戻る」、本物は「試合を選ぶ」） */
+  exitLabel?: string
 }
 
 /** 小数第1位の %。本数が少ない値は「*」を付ける（要件定義書 6 章「数値の表示」） */
@@ -28,13 +32,15 @@ const pct = (v: number | null, total: number): string =>
 
 const ZONE_BUTTONS = allZones('opponent')
 
-export default function PracticeScreen({ repo, onExit }: Props) {
+export default function PracticeScreen({ repo, ctx, onExit, exitLabel = '試合の記録に戻る' }: Props) {
+  const setId = ctx.sets[0]?.id ?? ''
+  const players = ctx.players.filter((p) => p.active)
   const [saveError, setSaveError] = useState<string | null>(null)
   const onError = useCallback((e: unknown) => {
     console.error(e)
     setSaveError('保存できませんでした。もう一度押してください')
   }, [])
-  const { sets, save, remove } = useMatchRecords(repo, DEMO_PRACTICE.id, onError)
+  const { sets, save, remove } = useMatchRecords(repo, ctx.match.id, onError)
 
   // 電波の弱い場所でも、送れていない記録に気づいて送り直せるようにする（F-17）
   const [pending, setPending] = useState(0)
@@ -46,7 +52,7 @@ export default function PracticeScreen({ repo, onExit }: Props) {
   const [to, setTo] = useState<{ x: number; y: number } | null>(null)
 
   const serves: readonly ServeRecord[] =
-    sets.find((s) => s.setId === DEMO_PRACTICE_SET.id)?.serves ?? []
+    sets.find((s) => s.setId === setId)?.serves ?? []
   const mine = serves.filter((s) => s.serverId === playerId)
   const summary = practiceSummary(mine)
   const last = mine.at(-1) ?? null
@@ -63,7 +69,7 @@ export default function PracticeScreen({ repo, onExit }: Props) {
     save({
       kind: 'serve',
       ...newIds(),
-      setId: DEMO_PRACTICE_SET.id,
+      setId,
       serverId: playerId,
       serveType,
       fromX: null,
@@ -94,7 +100,7 @@ export default function PracticeScreen({ repo, onExit }: Props) {
           </span>
         )}
         <button type="button" className="btn btn-sm" onClick={onExit}>
-          試合の記録に戻る
+          {exitLabel}
         </button>
       </header>
       {saveError && (
@@ -104,7 +110,7 @@ export default function PracticeScreen({ repo, onExit }: Props) {
       )}
 
       <div className="chips" role="group" aria-label="選手">
-        {DEMO_PLAYERS.map((p) => (
+        {players.map((p) => (
           <button
             key={p.id}
             type="button"
