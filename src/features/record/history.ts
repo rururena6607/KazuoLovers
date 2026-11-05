@@ -8,7 +8,7 @@ import type {
   PointRecord,
   SetRecords,
 } from '../../contracts/index.ts'
-import { zoneOf } from '../../lib/court/index.ts'
+import { type ColSplits, zoneOf } from '../../lib/court/index.ts'
 import { digGradeOf } from './dig.ts'
 import { ATTACK_RESULTS, MISS_TYPES } from './labels.ts'
 import { gradeOf } from './reception.ts'
@@ -68,12 +68,13 @@ export function relinkAttacks(plays: readonly PlayRecord[]): AttackRecord[] {
 /**
  * 画面の下に出す1行（要件定義書 6 章の例：`#7 → #12 C · Z1`）。
  * サーブは「サーバー → 受けた相手 結果 · 着弾ゾーン」、レシーブは「相手サーバー → レシーバー 結果」。
- * 名簿にいない選手は「?」
+ * 名簿にいない選手は「?」。colSplits はそのセットの相手コートの列の境目（F-24。省略すると等分）
  */
 export function describeEntry(
   entry: Entry,
   players: readonly Player[],
   oppPlayers: readonly OpponentPlayer[],
+  colSplits?: ColSplits,
 ): string {
   const own = (id: string | null) => {
     const p = players.find((x) => x.id === id)
@@ -87,7 +88,7 @@ export function describeEntry(
 
   switch (entry.kind) {
     case 'serve': {
-      const zone = zoneOf('opponent', entry.toX, entry.toY)
+      const zone = zoneOf('opponent', entry.toX, entry.toY, colSplits)
       const missLabel = MISS_TYPES.find((m) => m.value === entry.missType)?.label
       const result =
         entry.result === 'ace'

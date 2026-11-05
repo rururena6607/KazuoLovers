@@ -101,6 +101,12 @@ describe('describeEntry', () => {
     // 相手コートの奥の左（x 0.1, y 0.9）はゾーン 1
     expect(d(serve({ receiverId: 'o12', toX: 0.1, toY: 0.9 }))).toBe('#7 → #12 C · Z1')
   })
+  it('着弾ゾーンは、そのセットの列の境目に合わせる（F-24）', () => {
+    // 奥の列：等分なら x 0.3 は左（Z1）。境目を [0.25, 0.5] にすると中（Z6）
+    const sv = serve({ receiverId: 'o12', toX: 0.3, toY: 0.9 })
+    expect(d(sv)).toBe('#7 → #12 C · Z1')
+    expect(describeEntry(sv, DEMO_PLAYERS, DEMO_OPP_PLAYERS, [0.25, 0.5])).toBe('#7 → #12 C · Z6')
+  })
   it('エースとミス', () => {
     expect(d(serve({ result: 'ace', reception: null }))).toBe('#7 エース')
     expect(d(serve({ result: 'miss', reception: null, missType: 'net' }))).toBe('#7 ミス(ネット)')

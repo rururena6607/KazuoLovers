@@ -430,6 +430,7 @@ export default function RecordScreen({
             entries={entries}
             players={ctx.players}
             oppPlayers={oppPlayers}
+            colSplits={colSplits}
             onRemove={removeEntry}
             onEdit={editEntry}
             onClose={() => setShowList(false)}
@@ -497,7 +498,7 @@ export default function RecordScreen({
       </div>
       <footer className="record-foot">
         <span className="num last-entry">
-          {lastEntry ? describeEntry(lastEntry, ctx.players, oppPlayers) : '—'}
+          {lastEntry ? describeEntry(lastEntry, ctx.players, oppPlayers, colSplits) : '—'}
         </span>
         <button
           type="button"

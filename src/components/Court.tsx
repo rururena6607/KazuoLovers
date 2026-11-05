@@ -154,7 +154,7 @@ export function CourtLayer({
 
   /** ゾーンの長方形（SVG 上）。1〜6 以外は null */
   const zoneRect = (zone: number) => {
-    const b = zoneBounds(side, zone)
+    const b = zoneBounds(side, zone, colSplits)
     if (!b) return null
     const a = courtToSvg(side, { x: b.x0, y: b.y0 })
     const c = courtToSvg(side, { x: b.x1, y: b.y1 })
@@ -188,7 +188,7 @@ export function CourtLayer({
       ))}
       <line x1={MARGIN_X} x2={MARGIN_X + COURT_W} y1={attackY} y2={attackY} className="court-line" />
       {allZones(side).map((z) => {
-        const c = zoneCenter(side, z)
+        const c = zoneCenter(side, z, colSplits)
         if (!c) return null
         const p = courtToSvg(side, c)
         return (
