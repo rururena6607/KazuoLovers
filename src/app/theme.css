@@ -176,11 +176,11 @@ button {
   font-weight: 700;
 }
 /* 選手のボタンは横にスクロール */
+/* 選手・背番号のボタン。横にはみ出さず折り返して、全員が見えるようにする */
 .chips {
   display: flex;
   gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex-wrap: wrap;
 }
 .chip {
   flex: 0 0 auto;
@@ -477,48 +477,5 @@ button {
   .endline {
     max-width: 560px;
     margin: 0 auto;
-  }
-}
-
-/* iPad の横向き・PC：上に「相手名・得点・サーブ権」を1段で並べ、
-   入力欄は左にボタン（選手・種類・結果）、右にコート図を置く。スクロールせずに1本を入力できるようにする */
-@media (min-width: 960px) and (orientation: landscape) {
-  .app-main {
-    max-width: 1180px;
-  }
-  .record-side {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .record-side > * {
-    flex: 1 1 100%;
-  }
-  .record-side > .scoreboard,
-  .record-side > .seg {
-    flex: 1 1 360px;
-  }
-  .record-side > .seg > .btn {
-    min-height: 100%;
-  }
-  .panel {
-    display: block;
-  }
-  .panel > * {
-    margin: 0 calc(55% + 16px) 6px 0;
-  }
-  .panel > .court,
-  .panel > .endline {
-    float: right;
-    clear: right;
-    width: 55%;
-    max-width: none;
-    margin: 0 0 6px;
-  }
-  .panel::after {
-    content: '';
-    display: block;
-    clear: both;
   }
 }
