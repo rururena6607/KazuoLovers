@@ -247,3 +247,9 @@
   font-size: 13px;
   font-weight: 700;
 }
+
+/* 範囲「練習」の見出し（紅白戦／サーブ練習） */
+.an-part {
+  margin: 16px 0 8px;
+  font-size: 15px;
+}

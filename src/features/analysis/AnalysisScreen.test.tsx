@@ -187,3 +187,60 @@ describe('AnalysisScreen（レシーブ：相手のスパイク）', () => {
     expect(renderToString(<AnalysisScreen data={withDig} />)).not.toContain('拾えた率')
   })
 })
+
+describe('AnalysisScreen（範囲「練習」：紅白戦をメインに、サーブ練習は別の表）', () => {
+  const sv = (id: string, setId: string, o: object) => ({
+    kind: 'serve' as const,
+    clientId: id,
+    setId,
+    serverId: 'p7',
+    serveType: 'float' as const,
+    fromX: 0.5,
+    toX: 0.1,
+    toY: 0.1,
+    result: 'ace' as const,
+    missType: null,
+    reception: null,
+    receiverId: null,
+    targetZone: null,
+    recordedAt: '2026-11-05T00:00:00Z',
+    ...o,
+  })
+  const practiceData: AnalysisData = {
+    ...data,
+    matches: [
+      ...data.matches,
+      { id: 'sc', teamId: 't', kind: 'scrimmage', opponentId: 'b1', date: '2026-11-05', tournament: null, setPoints: 25 },
+      { id: 'pr', teamId: 't', kind: 'practice', opponentId: null, date: '2026-11-04', tournament: null, setPoints: 25 },
+    ],
+    gameSets: [
+      ...data.gameSets,
+      { id: 's5', matchId: 'sc', setNo: 1, ourScore: 0, oppScore: 0 },
+      { id: 's6', matchId: 'pr', setNo: 1, ourScore: 0, oppScore: 0 },
+    ],
+    records: [
+      ...data.records,
+      { setId: 's5', serves: [sv('x1', 's5', {}), sv('x2', 's5', { result: 'miss', missType: 'net' })], receptions: [], attacks: [], points: [] },
+      { setId: 's6', serves: [sv('y1', 's6', { result: 'in', targetZone: 1 })], receptions: [], attacks: [], points: [] },
+    ],
+  }
+  const html = renderToString(<AnalysisScreen data={practiceData} initialScope={{ kind: 'practice' }} />)
+
+  it('紅白戦を試合と同じ指標（サーブ効果率）で出し、サーブ練習を別の見出しで出す', () => {
+    expect(html).toContain('紅白戦')
+    expect(html).toContain('サーブ効果率')
+    expect(html).toContain('サーブ練習')
+    expect(html).toContain('ゾーン的中率')
+    // 紅白戦：エース1・ミス1 の2本 →（100 − 25）÷ 2 = 37.5%
+    expect(html).toContain('37.5%*')
+  })
+  it('Bチームの成績は含めていないことを注で伝える', () => {
+    expect(html).toContain('Bチームに入った部員のBチームとしての成績')
+  })
+  it('試合の全体には、紅白戦もサーブ練習も入らない', () => {
+    const all = renderToString(<AnalysisScreen data={practiceData} />)
+    expect(all).not.toContain('サーブ練習')
+    expect(all).toContain('100.0%*') // 試合 m1 のエース 1 本だけ
+    expect(all).not.toContain('37.5%')
+  })
+})
