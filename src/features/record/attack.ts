@@ -1,23 +1,49 @@
 // ラリー中の自チームのアタック1本を作る（要件定義書 F-20、5 章「アタックの結果」）。画面から切り離してテストする。
-import type { AttackRecord, AttackResult, AttackType, Grade, PlayRecord } from '../../contracts/index.ts'
+import type {
+  AttackRecord,
+  AttackResult,
+  AttackType,
+  Grade,
+  PlayRecord,
+  Speed,
+} from '../../contracts/index.ts'
+import type { CourtSide } from '../../lib/court/index.ts'
 import { toggle } from './labels.ts'
 import { gradeOf } from './reception.ts'
 
-/** 結果ボタンを押す前の入力。攻撃の種類・バックアタック・打った方向は任意 */
+/** 結果ボタンを押す前の入力。攻撃の種類・バックアタック・打った位置と方向・速さは任意 */
 export interface AttackDraft {
   attackerId: string | null
   attackType: AttackType | null
   /** バックアタックか。種類「バック」のときは常に true（withAttackType でそろえる） */
   isBack: boolean
+  /** 打った位置（矢印の始点。自コート） */
+  from: { x: number; y: number } | null
+  /** 打った方向（矢印の終点。相手コート） */
   to: { x: number; y: number } | null
+  speed: Speed | null
 }
 
 export const emptyAttackDraft = (): AttackDraft => ({
   attackerId: null,
   attackType: null,
   isBack: false,
+  from: null,
   to: null,
+  speed: null,
 })
+
+/**
+ * 両面のコート図のタップ（F-20「打った位置は自コート、方向は相手コート」）。
+ * 自コートを押したら打った位置、相手コートを押したら打った方向にする。どちらから押してもよい
+ */
+export function withArrowTap(
+  draft: AttackDraft,
+  side: CourtSide,
+  p: { x: number; y: number },
+): AttackDraft {
+  return side === 'own' ? { ...draft, from: p } : { ...draft, to: p }
+}
 
 /**
  * 種類のボタン（押し直しで外す）。「バック」を選んだらバックアタックにし、外したらバックアタックも外す。
@@ -51,8 +77,11 @@ export function buildAttack(
     attackerId: draft.attackerId,
     attackType: draft.attackType,
     isBack: draft.isBack,
+    fromX: draft.from?.x ?? null,
+    fromY: draft.from?.y ?? null,
     toX: draft.to?.x ?? null,
     toY: draft.to?.y ?? null,
+    speed: draft.speed,
     result,
     prevReception,
     recordedAt: ids.recordedAt,

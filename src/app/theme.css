@@ -398,6 +398,29 @@ button {
   stroke-width: 0.8;
 }
 
+/* 両面のコート図（矢印）。縦に長いので、375px で入力欄が画面に収まるよう幅を抑える */
+.court-full {
+  max-width: 300px;
+  margin: 0 auto;
+}
+.court-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--mute);
+}
+.court-arrow {
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.court-arrow-head {
+  fill: var(--ink);
+}
+.court-arrow-from {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 0.8;
+}
+
 /* 選手の色の点（F-22）。色だけに頼らず背番号を白で書く。白いふちでゾーンの色から浮かせる */
 .court-player-mark {
   pointer-events: none;
