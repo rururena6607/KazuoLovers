@@ -9,6 +9,7 @@ import {
   attackStatsByPlayer,
   isBackAttack,
   attackStatsByPrevReception,
+  attackStatsBySpeed,
   attackStatsByRow,
   attackStatsByType,
   opponentReceptionStatsByPlayer,
@@ -22,6 +23,7 @@ import {
   serveStatsByFromZone as serveStatsByFromZoneWith,
   serveStatsByLandingZone as serveStatsByLandingZoneWith,
   serveStatsByPlayer,
+  serveStatsBySpeed,
   serveStatsByType,
   summaryByGroup,
   summaryBySet,
@@ -361,5 +363,49 @@ describe('セット別・相手別の要約', () => {
 
   it('キーが null のセットは入れない', () => {
     expect(summaryByGroup(sets, () => null).size).toBe(0)
+  })
+})
+
+describe('速さ別の成績（F-26。5 章：上の式をそのまま使い、速さを入れなかった本数はどちらにも入れない）', () => {
+  it('サーブ：速い＝エース1・C1・ミス1 の3本 →（100 ＋ 25 − 25）÷ 3 ≒ 33.3%、遅い＝A1・D1 の2本 → 25 ÷ 2 = 12.5%', () => {
+    const by = serveStatsBySpeed([
+      serve({ speed: 'fast', result: 'ace', reception: null }),
+      serve({ speed: 'fast', reception: 'C' }),
+      serve({ speed: 'fast', result: 'miss', reception: null, missType: 'net' }),
+      serve({ speed: 'slow', reception: 'A' }),
+      serve({ speed: 'slow', reception: 'D' }),
+      serve({ speed: null, result: 'ace', reception: null }), // 速さなし：どちらにも入れない
+      serve({ result: 'ace', reception: null }), // speed を持たない記録も同じ
+    ])
+    expect([...by.keys()]).toEqual(['fast', 'slow'])
+    expect(by.get('fast')?.attempts).toBe(3)
+    expect(by.get('fast')?.efficiency).toBeCloseTo(33.33, 1)
+    expect(by.get('slow')?.attempts).toBe(2)
+    expect(by.get('slow')?.efficiency).toBe(12.5)
+  })
+
+  it('アタック：速い＝決定1・継続1 の2本 → 決定率 50%、遅い＝ミス1 の1本 → 0%', () => {
+    const by = attackStatsBySpeed([
+      attack({ speed: 'fast', result: 'kill' }),
+      attack({ speed: 'fast', result: 'continue' }),
+      attack({ speed: 'slow', result: 'error' }),
+      attack({ speed: null, result: 'kill' }),
+    ])
+    expect(by.get('fast')?.attempts).toBe(2)
+    expect(by.get('fast')?.killRate).toBe(50)
+    expect(by.get('slow')?.attempts).toBe(1)
+    expect(by.get('slow')?.killRate).toBe(0)
+  })
+
+  it('速さを入れた記録がなければ空', () => {
+    expect(serveStatsBySpeed([serve()]).size).toBe(0)
+    expect(attackStatsBySpeed([attack()]).size).toBe(0)
+  })
+
+  it('遅い記録だけでも、速い・遅いの順は変わらない（記録のあるものだけ）', () => {
+    expect([...serveStatsBySpeed([serve({ speed: 'slow' }), serve({ speed: 'fast' })]).keys()]).toEqual([
+      'fast',
+      'slow',
+    ])
   })
 })

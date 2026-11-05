@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type {
+  AttackRecord,
   GameSet,
   OppAttackRecord,
   OppAttackResult,
@@ -20,6 +21,7 @@ import {
   recordsInScope,
   scopeOptions,
   serveTypeTable,
+  speedTable,
   splitPractice,
   type AnalysisData,
 } from './view.ts'
@@ -389,6 +391,56 @@ describe('courseHeatmap（コース割合）', () => {
     const by = new Map(map.cells.map((c) => [c.zone, c]))
     expect(by.get(6)?.text).toBe('50.0%*（2）') // 2/4
     expect(by.get(1)?.text).toBe('50.0%*（2）')
+  })
+})
+
+describe('speedTable（速さ別。5 章：全体指標と同じ式、速さなしはどちらにも入れない）', () => {
+  const atk = (o: Partial<AttackRecord>): AttackRecord => ({
+    kind: 'attack',
+    clientId: 'a',
+    setId: 's1',
+    attackerId: 'p7',
+    attackType: null,
+    isBack: false,
+    toX: null,
+    toY: null,
+    result: 'kill',
+    prevReception: null,
+    recordedAt: '2026-11-05T00:00:00Z',
+    ...o,
+  })
+
+  it('サーブ：速い＝エース1・C1・ミス1 の3本 → 33.3%*、遅い＝A1 の1本 → 0.0%*。速さなしは入れない', () => {
+    const t = speedTable('serve', [
+      {
+        ...empty('s1'),
+        serves: [
+          serve({ speed: 'fast', result: 'ace', reception: null }),
+          serve({ speed: 'fast', reception: 'C' }),
+          serve({ speed: 'fast', result: 'miss', reception: null, missType: 'net' }),
+          serve({ speed: 'slow', reception: 'A' }),
+          serve({ speed: null, result: 'ace', reception: null }),
+        ],
+      },
+    ])
+    expect(t?.columns).toEqual(['打数', 'サーブ効果率', 'エース率', 'ミス率'])
+    expect(t?.rows.map((r) => [r.label, r.cells.map((c) => c.text)])).toEqual([
+      ['速い', ['3', '33.3%*', '33.3%*', '33.3%*']],
+      ['遅い', ['1', '0.0%*', '0.0%*', '0.0%*']],
+    ])
+  })
+
+  it('アタック：速い＝決定1・継続1 → 決定率 50.0%*', () => {
+    const t = speedTable('attack', [
+      { ...empty('s1'), attacks: [atk({ speed: 'fast' }), atk({ speed: 'fast', result: 'continue' })] },
+    ])
+    expect(t?.rows).toHaveLength(1)
+    expect(t?.rows[0]?.cells[1]?.text).toBe('50.0%*')
+  })
+
+  it('速さを入れた記録がない・レシーブは null', () => {
+    expect(speedTable('serve', [{ ...empty('s1'), serves: [serve()] }])).toBeNull()
+    expect(speedTable('reception', [empty('s1')])).toBeNull()
   })
 })
 

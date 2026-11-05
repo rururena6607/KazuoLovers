@@ -11,6 +11,7 @@ import {
   COURSE_NOTES,
   DIG_NOTE,
   SCRIMMAGE_NOTE,
+  SPEED_NOTE,
   TAB_LABELS,
   courseHeatmap,
   digView,
@@ -22,6 +23,7 @@ import {
   scopeOptions,
   splitPractice,
   serveTypeTable,
+  speedTable,
   type AnalysisData,
   type Scope,
   type Tab,
@@ -126,6 +128,7 @@ export function AnalysisScreen({
       course: tab === 'attack' ? null : courseHeatmap(tab, matchLike),
       dig: tab === 'reception' ? digView(matchLike) : null,
       types: tab === 'serve' ? serveTypeTable(matchLike) : null,
+      speed: speedTable(tab, matchLike),
       players: playerTable(tab, matchLike, data.players),
     }),
     [tab, matchLike, data.players],
@@ -215,6 +218,12 @@ export function AnalysisScreen({
             </section>
           )}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
+          {overview.speed && (
+            <>
+              <StatTable title="速さ別" nameHeader="速さ" table={overview.speed} />
+              <p className="an-note">{SPEED_NOTE}</p>
+            </>
+          )}
           <StatTable title="選手別" nameHeader="選手" table={overview.players} />
           {trend && <ScoreTrend rows={trend} />}
           <p className="an-note">{referenceNote}</p>
