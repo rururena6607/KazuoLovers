@@ -4,7 +4,7 @@
 // 画面では相手コートはネットが下（奥のエンドラインが上）、自コートはネットが上に来る。
 import type { MouseEvent } from 'react'
 import { DEFAULT_COL_SPLITS, ZONES } from '../contracts/index.ts'
-import type { CourtSide } from '../lib/court/index.ts'
+import type { ColSplits, CourtSide } from '../lib/court/index.ts'
 
 /** viewBox の大きさ。コートの外（アウト）もタップできるよう、周りに余白をとる */
 export const VIEW_W = 120
@@ -78,8 +78,8 @@ export function courtToFull(side: CourtSide, p: CourtPoint): CourtPoint {
 
 // 相手コートの列の境目（F-24）。縦の点線2本を左右に動かす。保存する値は GameSet の colSplit1・colSplit2。
 
-/** 列の境目2本（0.0〜1.0。左の列と中の列、中の列と右の列の間） */
-export type ColSplits = readonly [number, number]
+/** 列の境目2本（0.0〜1.0）。型は lib/court（T-50）のものを使う。画面の部品からはここから読めるようにしておく */
+export type { ColSplits }
 
 /**
  * 点線どうし・点線とサイドラインを近づけすぎない幅（コートの幅に対する割合）。
