@@ -1,0 +1,169 @@
+/* 分析画面（1c スコアボード案）。色は theme.css の変数を使い、ここで決めるのは分析画面だけの補助色。 */
+.analysis {
+  --an-line: var(--ink);
+  --an-neg: #c0262d;
+  --an-heat: #1d4ed8;
+  padding: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+@media (prefers-color-scheme: dark) {
+  .analysis {
+    --an-neg: #ff7b80;
+    --an-heat: #6c93ff;
+  }
+}
+.an-title {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+.an-seg {
+  display: flex;
+  margin: 0 0 12px;
+  border: 2px solid var(--an-line);
+}
+.an-seg button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  border-right: 2px solid var(--an-line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+}
+.an-seg button:last-child {
+  border-right: 0;
+}
+.an-seg button[aria-pressed='true'] {
+  background: var(--navy);
+  color: #fff;
+}
+.an-select {
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 12px;
+  padding: 0 8px;
+  border: 2px solid var(--an-line);
+  border-radius: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+}
+.an-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  margin: 0 0 16px;
+  border: 2px solid var(--an-line);
+}
+.an-metric {
+  padding: 8px;
+  border-right: 2px solid var(--an-line);
+}
+.an-metric:last-child {
+  border-right: 0;
+}
+.an-metric dt {
+  color: var(--mute);
+  font-size: 12px;
+}
+.an-metric dd {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+.an-num {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+.an-ref {
+  opacity: 0.55;
+}
+.an-neg {
+  color: var(--an-neg);
+}
+.an-section {
+  margin: 0 0 16px;
+}
+.an-section h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.an-scroll {
+  overflow-x: auto;
+}
+.an-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 2px solid var(--an-line);
+  font-size: 14px;
+}
+.an-table th,
+.an-table td {
+  padding: 8px;
+  border: 1px solid var(--an-line);
+  text-align: right;
+  white-space: nowrap;
+}
+.an-table thead th,
+.an-table tbody th {
+  text-align: left;
+  font-weight: 700;
+}
+.an-table thead th {
+  background: var(--navy);
+  color: #fff;
+}
+.an-heat {
+  margin: 0 0 16px;
+}
+.an-heat figcaption {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.an-net {
+  padding: 2px 0;
+  background: var(--navy);
+  color: #fff;
+  font-size: 11px;
+  text-align: center;
+}
+.an-heat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.an-zone {
+  position: relative;
+  min-height: 72px;
+  margin: 0 -1px -1px 0;
+  padding: 6px;
+  border: 2px solid var(--an-line);
+  background: color-mix(in srgb, var(--an-heat) calc(var(--heat) * 55%), var(--bg));
+}
+.an-zone-neg {
+  background: color-mix(in srgb, var(--an-neg) calc(var(--heat) * 55%), var(--bg));
+  color: var(--an-neg);
+}
+.an-zone-no {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  color: var(--mute);
+  font-size: 12px;
+  font-weight: 700;
+}
+.an-zone-val {
+  display: block;
+  padding-top: 18px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.an-empty,
+.an-note {
+  color: var(--mute);
+  font-size: 13px;
+}
