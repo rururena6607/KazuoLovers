@@ -64,3 +64,7 @@ export function attachToReception(rec: ReceptionRecord, patch: ReceptionPatch): 
   const same = (Object.keys(next) as (keyof ReceptionRecord)[]).every((k) => next[k] === rec[k])
   return same ? rec : next
 }
+
+/** レシーブの評価（A〜D）。被エース・相手ミスは null */
+export const gradeOf = (rec: ReceptionRecord): Grade | null =>
+  rec.result === 'ace' || rec.result === 'opp_miss' ? null : rec.result

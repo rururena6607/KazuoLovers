@@ -22,6 +22,8 @@ interface Props {
   players: readonly Player[]
   oppPlayers: readonly OpponentPlayer[]
   onSave: (rec: ReceptionRecord) => void
+  /** 取消・削除した clientId。直前の1本が消えたら付け足しをやめる */
+  removed: ReadonlySet<string>
 }
 
 const OUTCOMES: readonly { value: ReceptionOutcome; label: string }[] = [
@@ -29,10 +31,12 @@ const OUTCOMES: readonly { value: ReceptionOutcome; label: string }[] = [
   ...GRADES.map((g) => ({ value: g, label: g })),
 ]
 
-export default function ReceptionPanel({ setId, players, oppPlayers, onSave }: Props) {
+export default function ReceptionPanel({ setId, players, oppPlayers, onSave, removed }: Props) {
   const [draft, setDraft] = useState<ReceptionDraft>(emptyReceptionDraft)
   /** 直前の1本。次の1本の入力を始めたら null */
-  const [last, setLast] = useState<ReceptionRecord | null>(null)
+  const [saved, setLast] = useState<ReceptionRecord | null>(null)
+  // 取消・削除で消えた1本には付け足さない
+  const last = saved && !removed.has(saved.clientId) ? saved : null
   /** true のあいだ、任意項目は直前の1本に付け足す */
   const [attaching, setAttaching] = useState(false)
 
