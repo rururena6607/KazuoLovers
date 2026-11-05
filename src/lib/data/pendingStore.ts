@@ -1,5 +1,6 @@
 // 送信待ちを IndexedDB に残す PendingStore（T-15）。再読み込みやアプリを閉じても、未送信の記録が消えない。
 // IndexedDB が使えない環境（テスト、古いブラウザ）では、端末に残さない置き場にする。
+import type { AnyRecord } from '../../contracts/index.ts'
 import { memoryPendingStore, opClientId, type PendingOp, type PendingStore } from './recordRepository.ts'
 
 const DB_NAME = 'kazuolovers'
@@ -50,8 +51,20 @@ export function createIndexedDbPendingStore(): PendingStore {
   }
 }
 
+/**
+ * 記録の種類の一覧。型で漏れを検出する（AnyRecord に種類が増えて、ここに足し忘れると型エラーになる）。
+ * 足し忘れると、その種類の送信待ちが「形の違うもの」として読み飛ばされ、アプリを開き直すと消える
+ */
+const RECORD_KINDS: Record<AnyRecord['kind'], true> = {
+  serve: true,
+  reception: true,
+  attack: true,
+  opp_attack: true,
+  point: true,
+}
+
 /** 前の版のアプリが残したものなど、形の違うものは読まない */
-function isPendingOp(v: unknown): v is PendingOp {
+export function isPendingOp(v: unknown): v is PendingOp {
   if (typeof v !== 'object' || v === null) return false
   const op = v as Record<string, unknown>
   if (op.type === 'remove') return typeof op.clientId === 'string'
@@ -60,6 +73,7 @@ function isPendingOp(v: unknown): v is PendingOp {
   return (
     typeof rec.clientId === 'string' &&
     typeof rec.setId === 'string' &&
-    ['serve', 'reception', 'attack', 'point'].includes(String(rec.kind))
+    typeof rec.kind === 'string' &&
+    Object.hasOwn(RECORD_KINDS, rec.kind)
   )
 }

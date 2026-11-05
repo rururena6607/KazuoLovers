@@ -7,12 +7,14 @@ import {
   COLUMNS,
   TABLES,
   attackFromRow,
+  oppAttackFromRow,
   pointFromRow,
   receptionFromRow,
   recordFromRow,
   serveFromRow,
   toRow,
   type AttackRow,
+  type OppAttackRow,
   type PointRow,
   type ReceptionRow,
   type RecordRow,
@@ -53,17 +55,18 @@ export function createSupabaseRecordStore(getClient: () => SupabaseClient): Remo
       if (error) throw new Error(error.message)
     },
     async remove(clientId) {
-      // どのテーブルの記録かは clientId からは分からないので、4つとも消す（ないものは何もしない）
+      // どのテーブルの記録かは clientId からは分からないので、5つとも消す（ないものは何もしない）
       const results = await Promise.all(
         ALL_TABLES.map((t) => getClient().from(t).delete().eq('client_id', clientId)),
       )
       for (const { error } of results) if (error) throw new Error(error.message)
     },
     async listBySet(setId): Promise<SetRecords> {
-      const [serves, receptions, attacks, points] = await Promise.all([
+      const [serves, receptions, attacks, oppAttacks, points] = await Promise.all([
         select<ServeRow>(TABLES.serve, setId),
         select<ReceptionRow>(TABLES.reception, setId),
         select<AttackRow>(TABLES.attack, setId),
+        select<OppAttackRow>(TABLES.oppAttack, setId),
         select<PointRow>(TABLES.point, setId),
       ])
       return {
@@ -71,6 +74,7 @@ export function createSupabaseRecordStore(getClient: () => SupabaseClient): Remo
         serves: serves.map(serveFromRow),
         receptions: receptions.map(receptionFromRow),
         attacks: attacks.map(attackFromRow),
+        oppAttacks: oppAttacks.map(oppAttackFromRow),
         points: points.map(pointFromRow),
       }
     },

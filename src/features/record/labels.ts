@@ -5,6 +5,7 @@ import type {
   Grade,
   MissType,
   ServeType,
+  Speed,
 } from '../../contracts/index.ts'
 
 export const SERVE_TYPES: readonly { value: ServeType; label: string }[] = [
@@ -44,3 +45,9 @@ export const ATTACK_RESULTS: readonly { value: AttackResult; label: string }[] =
 
 /** 「7 渡辺」の形（要件定義書 6 章「選手は背番号と名前」） */
 export const playerLabel = (p: { number: number; name: string }): string => `${p.number} ${p.name}`
+
+/** 速さ（F-26）。サーブ・アタック・相手のスパイクで同じ2段階 */
+export const SPEEDS: readonly { value: Speed; label: string }[] = [
+  { value: 'fast', label: '速い' },
+  { value: 'slow', label: '遅い' },
+]
