@@ -282,3 +282,19 @@ describe('AnalysisScreen（範囲「練習」：紅白戦をメインに、サ�
     expect(all).not.toContain('37.5%')
   })
 })
+
+describe('AnalysisScreen（サーブ：散布図と選手での絞り込み）', () => {
+  const html = renderToString(<AnalysisScreen data={data} />)
+  it('着弾点の散布図に、選手の色の点と背番号、凡例（7 渡辺）を出す', () => {
+    expect(html).toContain('着弾点の散布図')
+    expect(html).toContain('court-player-mark')
+    expect(html).toContain('7 渡辺')
+  })
+  it('選手で絞り込む選択肢（全員／7 渡辺）を出す', () => {
+    expect(html).toContain('選手で絞り込み')
+    expect(html).toContain('全員')
+  })
+  it('記録がなければ、点は描かない', () => {
+    expect(renderToString(<AnalysisScreen data={{ ...data, records: [] }} />)).not.toContain('court-player-mark')
+  })
+})

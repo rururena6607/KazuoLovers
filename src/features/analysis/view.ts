@@ -13,6 +13,7 @@ import type {
   SetRecords,
   Speed,
 } from '../../contracts/index.ts'
+import type { CourtMark } from '../../components/Court.tsx'
 import { zoneOf } from '../../lib/court/index.ts'
 import {
   attackStatsByPlayer,
@@ -363,6 +364,89 @@ export function speedTable(tab: Tab, sets: readonly SetRecords[]): Table | null 
 
 /** 速さ別の表の注。速さは任意項目なので、入れなかった本数は含まれない */
 export const SPEED_NOTE = '速さ別は、速さを入力した本数だけで集計しています（入力していない本数は含めません）。'
+
+// ---- 選手での絞り込みと着弾点の散布図（F-22、T-26） ----
+
+export interface PlayerOption {
+  id: string
+  /** 「7 渡辺」 */
+  label: string
+}
+
+/** 絞り込みの対象にする選手の id。サーブ：サーバー、レシーブ：レシーバー。アタックには絞り込みがない */
+const playerIdOf = {
+  serve: (s: SetRecords) => s.serves.map((r) => r.serverId),
+  reception: (s: SetRecords) => s.receptions.flatMap((r) => (r.receiverId === null ? [] : [r.receiverId])),
+}
+
+/** 範囲に記録のある選手（背番号順）。絞り込みの選択肢 */
+export function playerOptions(
+  tab: Tab,
+  sets: readonly SetRecords[],
+  players: readonly Player[],
+): PlayerOption[] {
+  if (tab === 'attack') return []
+  const byId = new Map(players.map((p) => [p.id, p]))
+  const ids = [...new Set(sets.flatMap(playerIdOf[tab]))].sort(byNumber(players))
+  return ids.map((id) => ({ id, label: playerLabel(byId.get(id)) }))
+}
+
+/**
+ * 選手で絞った記録。サーブはサーバー、レシーブはレシーバーで絞る。playerId が null なら全員。
+ * ヒートマップ・コース割合・散布図に渡す（全体指標と表は絞らない）
+ */
+export function filterByPlayer(
+  tab: Tab,
+  sets: readonly SetRecords[],
+  playerId: string | null,
+): SetRecords[] {
+  if (playerId === null || tab === 'attack') return [...sets]
+  return sets.map((s) =>
+    tab === 'serve'
+      ? { ...s, serves: s.serves.filter((r) => r.serverId === playerId) }
+      : { ...s, receptions: s.receptions.filter((r) => r.receiverId === playerId) },
+  )
+}
+
+export interface Scatter {
+  /** 相手コート上の着弾点。選手ごとの色の点に背番号を書く */
+  marks: CourtMark[]
+  /** 凡例（色と「7 渡辺」）。点のある選手だけ、背番号順 */
+  legend: { id: string; label: string; color: string }[]
+}
+
+/**
+ * サーブの着弾点の散布図（F-22）。着弾点のないサーブ（ネット）は描かない。アウトの点は、コートの外に描く。
+ * 色は playerColorMap（記録画面と同じ）。色だけに頼らず、点の中に背番号を書く
+ */
+export function serveScatter(
+  sets: readonly SetRecords[],
+  players: readonly Player[],
+  colors: ReadonlyMap<string, string>,
+): Scatter {
+  const numberOf = new Map(players.map((p) => [p.id, p.number]))
+  const marks: CourtMark[] = []
+  const used = new Set<string>()
+  for (const s of flat.serves(sets)) {
+    const color = colors.get(s.serverId)
+    const number = numberOf.get(s.serverId)
+    if (s.toX === null || s.toY === null || color === undefined || number === undefined) continue
+    marks.push({ x: s.toX, y: s.toY, color, label: String(number) })
+    used.add(s.serverId)
+  }
+  const byId = new Map(players.map((p) => [p.id, p]))
+  return {
+    marks,
+    legend: [...used].sort(byNumber(players)).flatMap((id) => {
+      const color = colors.get(id)
+      return color === undefined ? [] : [{ id, label: playerLabel(byId.get(id)), color }]
+    }),
+  }
+}
+
+/** 散布図の注。点は座標のままで、線は 3 等分（セットごとの境目は、ヒートマップとコース割合に使う） */
+export const SCATTER_NOTE =
+  '散布図は、着弾点を記録したサーブの位置です（コートの外のアウトも描き、ネットは除く）。ゾーンの線は 3 等分で、セットごとの列の境目は、ヒートマップとコース割合に使っています。'
 
 // ---- ヒートマップ ----
 

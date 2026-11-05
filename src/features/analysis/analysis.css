@@ -253,3 +253,33 @@
   margin: 16px 0 8px;
   font-size: 15px;
 }
+
+/* 着弾点の散布図（F-22） */
+.an-scatter {
+  margin: 0 0 16px;
+}
+.an-scatter figcaption {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.an-scatter .court {
+  max-width: 360px;
+}
+.an-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.an-legend-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  border-radius: 50%;
+}
