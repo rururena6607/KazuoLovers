@@ -7,10 +7,13 @@ import {
   OPP_SPOTS,
   OUR_SPOTS,
   addOpp,
+  clearShapes,
   clampPoint,
+  halfBounds,
   ellipseOf,
   isBigEnough,
   pieceAt,
+  resetMoved,
   removeOpp,
   renumberOpp,
   rotate,
@@ -86,8 +89,10 @@ describe('図形', () => {
     expect(ellipseOf({ x: 10, y: 20 }, { x: 4, y: 6 })).toEqual({ cx: 7, cy: 13, rx: 3, ry: 7 })
     expect(ellipseOf({ x: 4, y: 6 }, { x: 10, y: 20 })).toEqual({ cx: 7, cy: 13, rx: 3, ry: 7 })
   })
-  it('コートの外には出さない', () => {
-    expect(clampPoint({ x: -5, y: 999 })).toEqual({ x: 0, y: BOARD_H })
+  it('出している半面の外には出さない', () => {
+    expect(clampPoint({ x: -5, y: 999 }, 'ours')).toEqual({ x: 0, y: BOARD_H })
+    expect(clampPoint({ x: 50, y: 10 }, 'ours').y).toBe(halfBounds('ours').y)
+    expect(clampPoint({ x: 150, y: 999 }, 'opp')).toEqual({ x: BOARD_W, y: halfBounds('opp').height })
   })
 })
 
@@ -112,5 +117,39 @@ describe('相手の駒（背番号）', () => {
     const r = removeOpp(s, 'a')
     expect(r.opp).toEqual([])
     expect(r.moved).toEqual({})
+  })
+})
+
+describe('半面', () => {
+  it('どちらの半面もネットを含み、自チームは下・相手は上', () => {
+    const ours = halfBounds('ours')
+    const opp = halfBounds('opp')
+    expect(ours.y + ours.height).toBe(BOARD_H)
+    expect(opp.y).toBe(0)
+    for (const b of [ours, opp]) {
+      expect(b.y).toBeLessThan(BOARD_H / 2)
+      expect(b.y + b.height).toBeGreaterThan(BOARD_H / 2)
+    }
+  })
+  it('自チームの立ち位置は自チームの半面に、相手の立ち位置は相手の半面に入る', () => {
+    const inside = (p: { y: number }, b: { y: number; height: number }) => p.y >= b.y && p.y <= b.y + b.height
+    OUR_SPOTS.forEach((p) => expect(inside(p, halfBounds('ours'))).toBe(true))
+    OPP_SPOTS.forEach((p) => expect(inside(p, halfBounds('opp'))).toBe(true))
+  })
+})
+
+describe('半面ごとの消去・戻し', () => {
+  const arrowOurs = { id: 'a', kind: 'arrow' as const, from: { x: 10, y: 150 }, to: { x: 40, y: 120 } }
+  const areaOpp = { id: 'b', kind: 'area' as const, tone: 'attack' as const, from: { x: 10, y: 20 }, to: { x: 40, y: 60 } }
+  it('図を消すのは出している半面だけ', () => {
+    const s: BoardState = { ...EMPTY_BOARD, shapes: [arrowOurs, areaOpp] }
+    expect(clearShapes(s, 'ours').shapes).toEqual([areaOpp])
+    expect(clearShapes(s, 'opp').shapes).toEqual([arrowOurs])
+  })
+  it('駒を戻すのは出している半面だけ', () => {
+    const base = addOpp({ ...EMPTY_BOARD, lineup: L }, 7, 'o7')
+    const s: BoardState = { ...base, moved: { p1: { x: 1, y: 100 }, o7: { x: 2, y: 3 } } }
+    expect(resetMoved(s, 'ours').moved).toEqual({ o7: { x: 2, y: 3 } })
+    expect(resetMoved(s, 'opp').moved).toEqual({ p1: { x: 1, y: 100 } })
   })
 })

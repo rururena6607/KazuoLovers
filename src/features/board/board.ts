@@ -1,5 +1,6 @@
 // 作戦ボード（F-23）の中身。画面（BoardScreen）から使う純粋な関数だけを置く。
-// コートは縦向きの全面：上が相手コート、下が自チームのコート、真ん中がネット。
+// 座標は縦向きの全面（上が相手コート、下が自チームのコート、真ん中がネット）で持ち、
+// 画面には半面ずつ大きく出す（自チーム／相手を切り替える）。それぞれの駒と図は切り替えても残る。
 // 端末の中だけで動き、保存しない（説明に使ってすぐ消せるもの。監督の要望）。
 
 /** コート全体の座標（9m × 18m を 10 倍、まわりに 5 の余白） */
@@ -63,11 +64,26 @@ export function togglePlayer(lineup: Lineup, playerId: string): Lineup {
   return lineup.map((id, i) => (i === empty ? playerId : id))
 }
 
-/** コートの外に出さない（余白の中までは置ける） */
-export const clampPoint = (p: Point): Point => ({
-  x: Math.min(BOARD_W, Math.max(0, p.x)),
-  y: Math.min(BOARD_H, Math.max(0, p.y)),
-})
+/** 画面に出す半面。自チームのコートか、相手のコートか */
+export type HalfSide = 'ours' | 'opp'
+
+/**
+ * 半面の範囲（全面の座標のうち、画面に出す部分）。どちらもネットとその少し向こうまで入れる。
+ * 相手のコートはネットが下に来る（自チームの側から見た向き）
+ */
+export function halfBounds(side: HalfSide) {
+  const height = NET_Y + MARGIN
+  return { x: 0, y: side === 'ours' ? BOARD_H - height : 0, width: BOARD_W, height }
+}
+
+/** 出している半面の外に出さない（駒やエリアが見えなくならないように） */
+export function clampPoint(p: Point, side: HalfSide): Point {
+  const b = halfBounds(side)
+  return {
+    x: Math.min(b.x + b.width, Math.max(b.x, p.x)),
+    y: Math.min(b.y + b.height, Math.max(b.y, p.y)),
+  }
+}
 
 export type AreaTone = 'defend' | 'attack'
 
@@ -93,14 +109,13 @@ export interface BoardState {
   lineup: Lineup
   /** 動かした駒の位置（選手の id または相手の駒の id）。ないものは基本の立ち位置 */
   moved: Readonly<Record<string, Point>>
-  /** 相手の駒を出すか */
-  showOpp: boolean
   /** 相手の駒。足した順に、相手のポジション 1〜6 の立ち位置に置く */
   opp: readonly OppPiece[]
+  /** 矢印・エリア。全面の座標で持つので、描いた半面を出したときだけ見える */
   shapes: readonly Shape[]
 }
 
-export const EMPTY_BOARD: BoardState = { lineup: EMPTY_LINEUP, moved: {}, showOpp: false, opp: [], shapes: [] }
+export const EMPTY_BOARD: BoardState = { lineup: EMPTY_LINEUP, moved: {}, opp: [], shapes: [] }
 
 /**
  * 相手の駒を足す。すでに同じ背番号があれば足さない。
@@ -142,3 +157,18 @@ export const rotateBoard = (state: BoardState, back = false): BoardState => ({
 
 /** 自チームのコートの外枠（描くときに使う） */
 export const COURT = { x: MARGIN, y: MARGIN, width: COURT_W, height: BOARD_H - MARGIN * 2 }
+
+/** 矢印・エリアがどちらの半面のものか（真ん中の点がネットのどちら側にあるか） */
+export const shapeSide = (s: Shape): HalfSide => ((s.from.y + s.to.y) / 2 < NET_Y ? 'opp' : 'ours')
+
+/** その半面の図だけを消す（もう片方の半面の図は残す） */
+export const clearShapes = (state: BoardState, side: HalfSide): BoardState => ({
+  ...state,
+  shapes: state.shapes.filter((s) => shapeSide(s) !== side),
+})
+
+/** その半面の駒だけを基本の立ち位置に戻す */
+export function resetMoved(state: BoardState, side: HalfSide): BoardState {
+  const ids = new Set(side === 'ours' ? state.lineup.filter((id) => id !== null) : state.opp.map((o) => o.id))
+  return { ...state, moved: Object.fromEntries(Object.entries(state.moved).filter(([k]) => !ids.has(k))) }
+}

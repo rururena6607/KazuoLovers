@@ -6,11 +6,11 @@
   padding: 6px 8px;
 }
 
-/* コートは縦に長いので、画面の高さに収める */
+/* 半面を大きく出す。画面の高さに収める */
 .board-court {
   display: block;
   width: 100%;
-  max-height: 70dvh;
+  max-height: 62dvh;
   /* 駒を動かす・描くときに画面がスクロールしないようにする */
   touch-action: none;
   user-select: none;

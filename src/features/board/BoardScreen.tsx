@@ -2,22 +2,26 @@ import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEven
 import type { Player } from '../../contracts/index.ts'
 import {
   ATTACK_LINE,
-  BOARD_H,
   BOARD_W,
   COURT,
   EMPTY_BOARD,
   NET_Y,
   addOpp,
+  clearShapes,
+  halfBounds,
   clampPoint,
   ellipseOf,
   isBigEnough,
   pieceAt,
   removeOpp,
+  resetMoved,
   renumberOpp,
   rotateBoard,
+  shapeSide,
   togglePlayer,
   type AreaTone,
   type BoardState,
+  type HalfSide,
   type Point,
   type Shape,
 } from './board.ts'
@@ -53,6 +57,8 @@ const nameSize = (name: string) => (name.length <= 2 ? 4.6 : name.length === 3 ?
 export default function BoardScreen({ players }: Props) {
   const [board, setBoard] = useState<BoardState>(EMPTY_BOARD)
   const [mode, setMode] = useState<Mode>('move')
+  /** 画面に出している半面。切り替えても、それぞれの駒と図は残る */
+  const [side, setSide] = useState<HalfSide>('ours')
   const [drag, setDrag] = useState<Drag>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const nextId = useRef(0)
@@ -89,6 +95,7 @@ export default function BoardScreen({ players }: Props) {
   const oppTaken = oppNumber !== null && board.opp.some((o) => o.number === oppNumber && o.id !== editingOpp)
 
   const nameOf = new Map(players.map((p) => [p.id, p.name]))
+  const view = halfBounds(side)
   const starters = board.lineup.filter((id): id is string => id !== null)
 
   /** 画面の座標をボードの座標にする（拡大・縮小されていても合う） */
@@ -96,7 +103,7 @@ export default function BoardScreen({ players }: Props) {
     const ctm = svgRef.current?.getScreenCTM()
     if (!ctm) return null
     const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse())
-    return clampPoint({ x: p.x, y: p.y })
+    return clampPoint({ x: p.x, y: p.y }, side)
   }
 
   const capture = (e: ReactPointerEvent) => svgRef.current?.setPointerCapture(e.pointerId)
@@ -194,55 +201,60 @@ export default function BoardScreen({ players }: Props) {
         <span>保存されません（説明用）</span>
       </header>
 
-      <div className="chips" role="group" aria-label="スタメン（6人まで。押した順にポジション1〜6）">
-        {players.map((p) => {
-          const pos = board.lineup.indexOf(p.id)
-          return (
+      <div className="row seg" role="group" aria-label="出すコート">
+        <button type="button" className="btn" aria-pressed={side === 'ours'} onClick={() => setSide('ours')}>
+          自チームのコート
+        </button>
+        <button type="button" className="btn" aria-pressed={side === 'opp'} onClick={() => setSide('opp')}>
+          相手のコート
+        </button>
+      </div>
+
+      {side === 'ours' && (
+        <>
+          <div className="chips" role="group" aria-label="スタメン（6人まで。押した順にポジション1〜6）">
+            {players.map((p) => {
+              const pos = board.lineup.indexOf(p.id)
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="btn chip"
+                  aria-pressed={pos !== -1}
+                  onClick={() => setBoard((b) => ({ ...b, lineup: togglePlayer(b.lineup, p.id) }))}
+                >
+                  {pos !== -1 && <span className="board-pos">{pos + 1}</span>}
+                  {p.name}
+                </button>
+              )
+            })}
+          </div>
+    
+          <div className="row" role="group" aria-label="ローテーションと駒">
             <button
-              key={p.id}
               type="button"
-              className="btn chip"
-              aria-pressed={pos !== -1}
-              onClick={() => setBoard((b) => ({ ...b, lineup: togglePlayer(b.lineup, p.id) }))}
+              className="btn btn-sm"
+              disabled={starters.length === 0}
+              onClick={() => setBoard((b) => rotateBoard(b))}
             >
-              {pos !== -1 && <span className="board-pos">{pos + 1}</span>}
-              {p.name}
+              ローテを回す
             </button>
-          )
-        })}
-      </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={starters.length === 0}
+              onClick={() => setBoard((b) => rotateBoard(b, true))}
+            >
+              1つ戻す
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => setBoard((b) => resetMoved(b, 'ours'))}>
+              駒を元の位置に
+            </button>
+          </div>
+        </>
+      )}
 
-      <div className="row" role="group" aria-label="ローテーションと駒">
-        <button
-          type="button"
-          className="btn btn-sm"
-          disabled={starters.length === 0}
-          onClick={() => setBoard((b) => rotateBoard(b))}
-        >
-          ローテを回す
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm"
-          disabled={starters.length === 0}
-          onClick={() => setBoard((b) => rotateBoard(b, true))}
-        >
-          1つ戻す
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm"
-          aria-pressed={board.showOpp}
-          onClick={() => setBoard((b) => ({ ...b, showOpp: !b.showOpp }))}
-        >
-          相手の駒
-        </button>
-        <button type="button" className="btn btn-sm" onClick={() => setBoard((b) => ({ ...b, moved: {} }))}>
-          駒を元の位置に
-        </button>
-      </div>
-
-      {board.showOpp && (
+      {side === 'opp' && (
         <form className="board-opp" onSubmit={submitOpp} aria-label="相手の駒（背番号）">
           <span className="chips-label">相手</span>
           {board.opp.map((o) => (
@@ -284,6 +296,9 @@ export default function BoardScreen({ players }: Props) {
             </button>
           )}
           {oppTaken && <span className="chips-label">その番号はもういます</span>}
+          <button type="button" className="btn btn-sm" onClick={() => setBoard((b) => resetMoved(b, 'opp'))}>
+            駒を元の位置に
+          </button>
         </form>
       )}
 
@@ -304,9 +319,9 @@ export default function BoardScreen({ players }: Props) {
       <svg
         ref={svgRef}
         className={`board-court is-${mode}`}
-        viewBox={`0 0 ${BOARD_W} ${BOARD_H}`}
+        viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}
         role="img"
-        aria-label="コート（上が相手、下が自チーム）"
+        aria-label={side === 'ours' ? '自チームのコート（上がネット）' : '相手のコート（下がネット）'}
         onPointerDown={startDraw}
         onPointerMove={onMove}
         onPointerUp={onUp}
@@ -326,7 +341,7 @@ export default function BoardScreen({ players }: Props) {
         {board.shapes.map(drawShape)}
         {preview && <g className="is-preview">{drawShape(preview)}</g>}
 
-        {board.showOpp && board.opp.map((o) => piece(o.id, String(o.number), true))}
+        {board.opp.map((o) => piece(o.id, String(o.number), true))}
         {starters.map((id) => piece(id, nameOf.get(id) ?? '?', false))}
       </svg>
 
@@ -334,13 +349,13 @@ export default function BoardScreen({ players }: Props) {
         <button
           type="button"
           className="btn btn-sm"
-          disabled={board.shapes.length === 0}
-          onClick={() => setBoard((b) => ({ ...b, shapes: [] }))}
+          disabled={!board.shapes.some((s) => shapeSide(s) === side)}
+          onClick={() => setBoard((b) => clearShapes(b, side))}
         >
-          図を全部消す
+          このコートの図を消す
         </button>
         <button type="button" className="btn btn-sm" onClick={() => setBoard(EMPTY_BOARD)}>
-          全部やり直す
+          両方のコートをやり直す
         </button>
       </div>
     </section>
