@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Court from '../../components/Court.tsx'
 import type { OpponentPlayer, Player, ReceptionRecord } from '../../contracts/index.ts'
 import AddOppNumber from './AddOppNumber.tsx'
+import { numberLabel } from './scrimmage.ts'
 import { newIds } from './ids.ts'
 import { GRADES, SERVE_TYPES, playerLabel, toggle } from './labels.ts'
 import {
@@ -26,7 +27,11 @@ interface Props {
   /** 取消・削除した clientId。直前の1本が消えたら付け足しをやめる */
   removed: ReadonlySet<string>
   /** 相手の背番号をその場で足す（F-04）。足せないときは undefined */
-  onAddOpp?: (number: number) => Promise<OpponentPlayer>
+  onAddOpp?: (number: number, playerId?: string) => Promise<OpponentPlayer>
+  /** 相手の選手のボタンの文字（紅白戦の B チームは部員の名前。F-27）。省略時は背番号 */
+  oppLabel?: (o: OpponentPlayer) => string
+  /** 紅白戦のとき、B チームに足せる部員（F-27） */
+  bCandidates?: readonly Player[]
 }
 
 const OUTCOMES: readonly { value: ReceptionOutcome; label: string }[] = [
@@ -41,6 +46,8 @@ export default function ReceptionPanel({
   onSave,
   removed,
   onAddOpp,
+  oppLabel = numberLabel,
+  bCandidates,
 }: Props) {
   const [draft, setDraft] = useState<ReceptionDraft>(emptyReceptionDraft)
   /** 直前の1本。次の1本の入力を始めたら null */
@@ -152,14 +159,14 @@ export default function ReceptionPanel({
           <button
             key={o.id}
             type="button"
-            className="btn chip num"
+            className={o.playerId ? 'btn chip' : 'btn chip num'}
             aria-pressed={oppServerId === o.id}
             onClick={() => setOptional({ oppServerId: toggle(oppServerId, o.id) })}
           >
-            {o.number}
+            {oppLabel(o)}
           </button>
         ))}
-        <AddOppNumber onAdd={onAddOpp} onAdded={(p) => setOptional({ oppServerId: p.id })} />
+        <AddOppNumber onAdd={onAddOpp} candidates={bCandidates} onAdded={(p) => setOptional({ oppServerId: p.id })} />
       </div>
       <div className="row" role="group" aria-label="相手のサーブの種類（任意）">
         {SERVE_TYPES.map((t) => (

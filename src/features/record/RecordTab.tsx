@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { MatchContext, MatchRepository, RecordRepository } from '../../contracts/index.ts'
 import PracticeScreen from '../practice/PracticeScreen.tsx'
-import { withOppPlayer, withSet } from './matchSource.ts'
+import { withOppPlayer, withSavedSet, withSet } from './matchSource.ts'
 import RecordScreen from './RecordScreen.tsx'
 
 // 記録のタブ：選んだ試合を読み、試合なら記録画面、練習（kind が practice）なら練習モードを出す。
@@ -107,8 +107,9 @@ export default function RecordTab({
 
   const opponent = ctx.opponent
   const onAddOpp = opponent
-    ? (n: number) =>
-        source.addOpponentPlayer(opponent.id, n).then((p) => {
+    ? // 紅白戦の B チームには playerId（部員）も渡す（F-27、#63）
+      (n: number, playerId?: string) =>
+        source.addOpponentPlayer(opponent.id, n, playerId).then((p) => {
           update((c) => ({ ...c, opponentPlayers: withOppPlayer(c.opponentPlayers, p) }))
           return p
         })
@@ -119,6 +120,12 @@ export default function RecordTab({
       update((c) => ({ ...c, sets: withSet(c.sets, s) }))
     })
 
+  /** 動かした列の境目を保存し（MatchRepository.updateColSplits、#63）、保存したセットで手元の ctx を置き換える（F-24） */
+  const onSaveColSplits = (setId: string, [a, b]: readonly [number, number]) =>
+    source.updateColSplits(setId, a, b).then((s) => {
+      update((c) => ({ ...c, sets: withSavedSet(c.sets, s) }))
+    })
+
   return (
     <RecordScreen
       key={ctx.match.id}
@@ -127,6 +134,7 @@ export default function RecordTab({
       onNextSet={onNextSet}
       onAddOpp={onAddOpp}
       onPractice={onPractice}
+      onSaveColSplits={onSaveColSplits}
     />
   )
 }
