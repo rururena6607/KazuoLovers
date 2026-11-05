@@ -20,6 +20,7 @@ import {
   type ServeStats,
   type ServeType,
   type SetRecords,
+  type Speed,
 } from '../../contracts/index.ts'
 import {
   attackStatsOf,
@@ -36,6 +37,7 @@ export type ZoneOf = (side: CourtSide, x: number | null, y: number | null) => nu
 
 const SERVE_TYPE_ORDER: readonly ServeType[] = ['float', 'jump_float', 'jump', 'other']
 const ATTACK_TYPE_ORDER: readonly AttackType[] = ['left', 'center', 'right', 'back', 'other']
+const SPEED_ORDER: readonly Speed[] = ['fast', 'slow']
 const GRADE_ORDER: readonly Grade[] = ['A', 'B', 'C', 'D']
 
 /** ヒートマップに並べるゾーン（番号順）。ZONES から求める */
@@ -92,6 +94,10 @@ export const serveStatsByPlayer = (serves: readonly ServeRecord[]): Map<string, 
 
 export const serveStatsByType = (serves: readonly ServeRecord[]): Map<ServeType, ServeStats> =>
   inOrder(mapValues(groupBy(serves, (s) => s.serveType), serveStatsOf), SERVE_TYPE_ORDER)
+
+/** 速さ別（F-26）。速さを入れなかった本数は、どちらにも入れない。記録のある速さだけ、速い・遅いの順に返す */
+export const serveStatsBySpeed = (serves: readonly ServeRecord[]): Map<Speed, ServeStats> =>
+  inOrder(mapValues(groupBy(serves, (s) => s.speed ?? null), serveStatsOf), SPEED_ORDER)
 
 /** 打つ位置別。エンドライン上の位置を自コート奥のゾーン（ZONES.own.back の順）に分ける。位置なしは入れない */
 export const serveStatsByFromZone = (
@@ -158,6 +164,10 @@ export const attackStatsByPlayer = (attacks: readonly AttackRecord[]): Map<strin
 
 export const attackStatsByType = (attacks: readonly AttackRecord[]): Map<AttackType, AttackStats> =>
   inOrder(mapValues(groupBy(attacks, (a) => a.attackType), attackStatsOf), ATTACK_TYPE_ORDER)
+
+/** 速さ別（F-26）。速さを入れなかった本数は、どちらにも入れない。記録のある速さだけ、速い・遅いの順に返す */
+export const attackStatsBySpeed = (attacks: readonly AttackRecord[]): Map<Speed, AttackStats> =>
+  inOrder(mapValues(groupBy(attacks, (a) => a.speed ?? null), attackStatsOf), SPEED_ORDER)
 
 /** 前のサーブレシーブの評価（A〜D）別。切り返しのアタックは入れない */
 export const attackStatsByPrevReception = (

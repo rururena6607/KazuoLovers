@@ -5,16 +5,26 @@ import type {
   GameSet,
   Match,
   Opponent,
+  OpponentPlayer,
   Player,
   ReceptionStats,
   ServeStats,
   ServeType,
   SetRecords,
+  Speed,
 } from '../../contracts/index.ts'
 import { zoneOf } from '../../lib/court/index.ts'
 import {
   attackStatsByPlayer,
+  attackStatsBySpeed,
+  bTeamAttacks,
+  bTeamReceptions,
+  bTeamServes,
+  oppPlayerMapOf,
   attackStatsOf,
+  digLandingShare,
+  digOriginShare,
+  digStatsOf,
   practiceStatsByPlayer,
   practiceStatsByTargetZone,
   practiceStatsOf,
@@ -25,6 +35,7 @@ import {
   serveLandingShare,
   serveStatsByLandingZone,
   serveStatsByPlayer,
+  serveStatsBySpeed,
   serveStatsByType,
   serveStatsOf,
   type PracticeStats,
@@ -37,6 +48,11 @@ export interface AnalysisData {
   matches: readonly Match[]
   gameSets: readonly GameSet[]
   records: readonly SetRecords[]
+  /**
+   * 相手選手。紅白戦のBチームの選手（playerId で部員と結ぶ）の成績を出すのに使う（F-27）。
+   * なければ（またはBチームの選手がいなければ）、紅白戦はAチーム側の記録だけで集計する
+   */
+  opponentPlayers?: readonly OpponentPlayer[]
 }
 
 /**
@@ -99,21 +115,60 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
 export function splitPractice(
   sets: readonly SetRecords[],
   data: AnalysisData,
-): { scrimmage: SetRecords[]; drill: SetRecords[] } {
+): { scrimmage: SetRecords[]; scrimmageForTypes: SetRecords[]; drill: SetRecords[] } {
   const matchById = new Map(data.matches.map((m) => [m.id, m]))
   const kindOfSet = new Map(data.gameSets.map((gs) => [gs.id, matchById.get(gs.matchId)?.kind]))
+  const members = oppPlayerMapOf(data.opponentPlayers ?? [])
+  const scrimmageSets = sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage')
   return {
-    scrimmage: sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage'),
+    scrimmage: scrimmageSets.map((r) => withBTeam(r, members)),
+    // サーブの種類別の表用。Bのサーブは種類が記録された本数だけ（空の本数を「その他」に混ぜない）
+    scrimmageForTypes: scrimmageSets.map((r) => withBTeam(r, members, true)),
     drill: sets.filter((r) => kindOfSet.get(r.setId) === 'practice'),
   }
 }
 
 /**
- * 紅白戦の画面の注。数え方が未決のBチームの成績は、まだ出していない（要件定義書 12 章「紅白戦の読み替えの規則」）。
- * 試合の選手別表と同じく、自チームのAの記録（サーブ・サーブレシーブ・アタック）で、その部員の成績を出す
+ * 紅白戦の記録に、Bチームの成績を足す（5 章「紅白戦の個人成績」）。Bの記録は、Aの記録を裏返したものを
+ * 「その部員の記録」の形に読み替えて足す（lib/stats の bTeamServes など）。部員が分かる本数だけが入る
  */
+function withBTeam(
+  r: SetRecords,
+  members: ReturnType<typeof oppPlayerMapOf>,
+  knownTypeOnly = false,
+): SetRecords {
+  if (members.size === 0) return r
+  return {
+    ...r,
+    serves: [...r.serves, ...bTeamServes(r.receptions, members, { knownTypeOnly })],
+    receptions: [...r.receptions, ...bTeamReceptions(r.serves, members)],
+    attacks: [...r.attacks, ...bTeamAttacks(r.oppAttacks ?? [], members)],
+  }
+}
+
+/** 紅白戦の画面の注。Aチーム側とBチーム側の記録を、その部員の成績に入れている（5 章「紅白戦の個人成績」） */
 export const SCRIMMAGE_NOTE =
-  '紅白戦は、Aチーム側（自チームとして記録した分）の記録で集計しています。Bチームに入った部員のBチームとしての成績は、数え方が決まっていないため、まだ含めていません。'
+  '紅白戦は、Aチーム側とBチーム側の記録を、その部員の成績として集計しています。Bチームの成績は、相手サーバー・受けた相手・打った相手選手が入っている記録だけが入ります（入っていない記録はどの部員にも入りません）。'
+
+/** レシーブのタブの注。Bチームのエースとミスは受けた相手が記録されないので、受数に入らない */
+export const SCRIMMAGE_RECEPTION_NOTE =
+  'Bチームのサーブレシーブ成功率は、受けた相手が記録されたA〜Dの本数だけなので、少し高めに出ることがあります（被エースは入りません）。'
+
+/** アタックのタブの注。被ブロックの記録がないので、Bチームの効果率と失点は出さない */
+export const SCRIMMAGE_ATTACK_NOTE =
+  'アタックは、Bチームに被ブロックの記録がないため、打数とアタック決定率だけを出しています。'
+
+/** 紅白戦のアタックの表から、効果率と失点の列を除く（Bチームの被ブロックが記録されないため） */
+const ATTACK_HIDDEN = new Set(['効果率', '失点'])
+export const attackMetricsForScrimmage = (metrics: readonly Metric[]): Metric[] =>
+  metrics.filter((m) => !ATTACK_HIDDEN.has(m.label))
+export function attackTableForScrimmage(t: Table): Table {
+  const keep = t.columns.map((c) => !ATTACK_HIDDEN.has(c))
+  return {
+    columns: t.columns.filter((_, i) => keep[i]),
+    rows: t.rows.map((r) => ({ ...r, cells: r.cells.filter((_, i) => keep[i]) })),
+  }
+}
 
 // ---- 表示用の値 ----
 
@@ -269,6 +324,32 @@ export function serveTypeTable(sets: readonly SetRecords[]): Table {
   }
 }
 
+export const SPEED_LABELS: Record<Speed, string> = { fast: '速い', slow: '遅い' }
+
+/**
+ * 速さ別の表（F-26）。サーブ・アタックの全体指標と同じ式で出す（5 章「速さ別の成績」）。
+ * 速さを入れなかった本数は、どちらにも入れない。速さを入れた記録がなければ null（レシーブにはない）
+ */
+export function speedTable(tab: Tab, sets: readonly SetRecords[]): Table | null {
+  const rowsOf = <S,>(by: Map<Speed, S>, cellsOf: (s: S) => Cells): TableRow[] =>
+    [...by].map(([speed, s]) => ({ id: speed, label: SPEED_LABELS[speed], cells: cellsOf(s).cells }))
+  switch (tab) {
+    case 'serve': {
+      const rows = rowsOf(serveStatsBySpeed(flat.serves(sets)), serveCells)
+      return rows.length === 0 ? null : { columns: SERVE_COLUMNS, rows }
+    }
+    case 'attack': {
+      const rows = rowsOf(attackStatsBySpeed(flat.attacks(sets)), attackCells)
+      return rows.length === 0 ? null : { columns: ATTACK_COLUMNS, rows }
+    }
+    case 'reception':
+      return null
+  }
+}
+
+/** 速さ別の表の注。速さは任意項目なので、入れなかった本数は含まれない */
+export const SPEED_NOTE = '速さ別は、速さを入力した本数だけで集計しています（入力していない本数は含めません）。'
+
 // ---- ヒートマップ ----
 
 export interface HeatCell {
@@ -358,6 +439,45 @@ export const COURSE_NOTES = {
   serve: 'コース割合は、着弾点を記録したサーブに対する割合です（コートの外のアウトは含み、ネットは除く）。',
   reception: 'コース割合は、受けた位置を記録したレシーブに対する割合です。',
 } as const
+
+// ---- 相手のスパイク（F-25） ----
+
+export interface DigView {
+  /** 本数・拾えた率・拾えず・相手ミス */
+  metrics: Metric[]
+  /** 落ちた位置の割合（自コート） */
+  landing: Heatmap
+  /** 打ってくる位置の割合（相手コート） */
+  origin: Heatmap
+}
+
+/**
+ * 相手のスパイクの分析（要件定義書 5 章「相手のスパイク」）。
+ * 拾えた率 = 拾えた（A〜D）÷（拾えた ＋ 拾えず）。相手ミスは分母に入れない（分母の本数が 10 本未満なら「*」）。
+ * 位置の割合は、位置を記録した本数に対するそのゾーンの割合
+ */
+export function digView(sets: readonly SetRecords[]): DigView {
+  const records = sets.flatMap((s) => s.oppAttacks ?? [])
+  const stats = digStatsOf(records)
+  const landing = digLandingShare(records, zoneOf)
+  const origin = digOriginShare(records, zoneOf)
+  const toValues = (share: typeof landing): ZoneValue[] =>
+    [...share.zones].map(([zone, z]) => ({ zone, value: z.share, count: z.count }))
+  return {
+    metrics: [
+      { label: '相手のスパイク', cell: countCell(stats.total) },
+      { label: '拾えた率', cell: rateCell(stats.digRate, stats.dug + stats.killed) },
+      { label: '拾えず', cell: countCell(stats.killed) },
+      { label: '相手ミス', cell: countCell(stats.oppError) },
+    ],
+    landing: makeHeatmap('own', '落ちた位置の割合', toValues(landing)),
+    origin: makeHeatmap('opponent', '打ってくる位置の割合', toValues(origin)),
+  }
+}
+
+/** 相手のスパイクの分母の説明（画面の注） */
+export const DIG_NOTE =
+  '拾えた率は、拾えた（A〜D）÷（拾えた＋拾えず）です（相手ミスは含めません）。位置の割合は、位置を記録したスパイクに対する割合です。'
 
 // ---- 練習 ----
 

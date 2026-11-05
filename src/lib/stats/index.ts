@@ -11,3 +11,5 @@ export {
 export * from './aggregate.ts'
 export * from './aiSummary.ts'
 export * from './course.ts'
+export * from './dig.ts'
+export * from './scrimmage.ts'

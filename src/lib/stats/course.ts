@@ -28,7 +28,7 @@ const ZONE_NUMBERS: readonly number[] = [...ZONES.opponent.front, ...ZONES.oppon
   (a, b) => a - b,
 )
 
-function shareOf(zones: readonly (number | null)[], total: number): CourseShare {
+export function shareOf(zones: readonly (number | null)[], total: number): CourseShare {
   const counts = new Map<number, number>(ZONE_NUMBERS.map((z) => [z, 0]))
   for (const zone of zones) {
     if (zone !== null) counts.set(zone, (counts.get(zone) ?? 0) + 1)

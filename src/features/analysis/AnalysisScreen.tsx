@@ -9,9 +9,16 @@ import { MetricRow, StatTable } from './StatTable.tsx'
 import { emptySet, scoreTrend, setResults } from './setResults.ts'
 import {
   COURSE_NOTES,
+  DIG_NOTE,
+  SCRIMMAGE_ATTACK_NOTE,
   SCRIMMAGE_NOTE,
+  SCRIMMAGE_RECEPTION_NOTE,
+  SPEED_NOTE,
   TAB_LABELS,
+  attackMetricsForScrimmage,
+  attackTableForScrimmage,
   courseHeatmap,
+  digView,
   heatmap,
   overallMetrics,
   playerTable,
@@ -20,6 +27,7 @@ import {
   scopeOptions,
   splitPractice,
   serveTypeTable,
+  speedTable,
   type AnalysisData,
   type Scope,
   type Tab,
@@ -119,13 +127,22 @@ export function AnalysisScreen({
   // タブを切り替えても、範囲の集計はやり直さない。表示用の値は、記録・タブ・選手が変わったときだけ作る
   const overview = useMemo(
     () => ({
-      metrics: overallMetrics(tab, matchLike),
+      metrics:
+        parts && tab === 'attack'
+          ? attackMetricsForScrimmage(overallMetrics(tab, matchLike))
+          : overallMetrics(tab, matchLike),
       heat: tab === 'attack' ? null : heatmap(tab, matchLike),
       course: tab === 'attack' ? null : courseHeatmap(tab, matchLike),
-      types: tab === 'serve' ? serveTypeTable(matchLike) : null,
-      players: playerTable(tab, matchLike, data.players),
+      dig: tab === 'reception' ? digView(matchLike) : null,
+      types: tab === 'serve' ? serveTypeTable(parts ? parts.scrimmageForTypes : matchLike) : null,
+      // 紅白戦のアタックは、Bチームに被ブロックの記録がないので、速さ別の表も効果率と失点を除く
+      speed: ((t) => (t && parts && tab === 'attack' ? attackTableForScrimmage(t) : t))(speedTable(tab, matchLike)),
+      players:
+        parts && tab === 'attack'
+          ? attackTableForScrimmage(playerTable(tab, matchLike, data.players))
+          : playerTable(tab, matchLike, data.players),
     }),
-    [tab, matchLike, data.players],
+    [tab, matchLike, data.players, parts],
   )
   const practice = useMemo(
     () => (parts ? practiceView(parts.drill, data.players) : null),
@@ -202,11 +219,28 @@ export function AnalysisScreen({
               <p className="an-note">{tab === 'serve' ? COURSE_NOTES.serve : COURSE_NOTES.reception}</p>
             </>
           )}
+          {overview.dig && (
+            <section className="an-section" aria-label="相手のスパイク">
+              <h3>相手のスパイク</h3>
+              <MetricRow metrics={overview.dig.metrics} />
+              <Heatmap map={overview.dig.landing} />
+              <Heatmap map={overview.dig.origin} />
+              <p className="an-note">{DIG_NOTE}</p>
+            </section>
+          )}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
+          {overview.speed && (
+            <>
+              <StatTable title="速さ別" nameHeader="速さ" table={overview.speed} />
+              <p className="an-note">{SPEED_NOTE}</p>
+            </>
+          )}
           <StatTable title="選手別" nameHeader="選手" table={overview.players} />
           {trend && <ScoreTrend rows={trend} />}
           <p className="an-note">{referenceNote}</p>
           {parts && <p className="an-note">{SCRIMMAGE_NOTE}</p>}
+          {parts && tab === 'reception' && <p className="an-note">{SCRIMMAGE_RECEPTION_NOTE}</p>}
+          {parts && tab === 'attack' && <p className="an-note">{SCRIMMAGE_ATTACK_NOTE}</p>}
         </>
       )}
 
