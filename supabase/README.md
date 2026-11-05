@@ -72,11 +72,59 @@ SMTP を保存すると、「Authentication → Emails → Templates」の件名
 - 「Authentication → Logs」で、SMTP のエラー（パスワードの間違いなど）が出ていないか見る
 - 「メールを送りすぎました」と出たら、「Authentication → Rate Limits」の1時間あたりのメールの上限を確かめる。部員が一度にログインする日は、上限を上げておく
 
+## AI コメント（T-30、gemini-report）
+
+分析画面から集計（背番号と数値だけ）を受け取り、Gemini のコメントを返して `ai_reports` に残す Edge Function。コードは `functions/gemini-report/`（`index.ts` と `logic.ts` の2つ）。
+
+- ログインした部員だけが、自分のチームについて呼べる
+- 同じ範囲（scope）で同じ集計なら、保存済みのコメントを返す（Gemini を呼ばない）
+- 集計に選手の名前や `name` などのキーが入っていたら、Gemini に送らずに断る
+- 1チームが1日に作れるのは 20 回まで（保存済みを返すときは数えない）
+
+### 1. Gemini の API キーを作る
+
+1. **学校のアドレスで** https://aistudio.google.com を開く
+2. 「Get API key」→「Create API key」でキーを作る。キーはどこにも貼らない（コード・コミット・チャット）
+
+### 2. シークレットを入れる
+
+Supabase の「Edge Functions → Secrets」で、次を足す。
+
+| 名前 | 値 |
+| --- | --- |
+| `GEMINI_API_KEY` | 1 で作ったキー |
+| `GEMINI_MODEL`（任意） | 使うモデル。入れなければ `gemini-2.5-flash`。AI Studio で無料枠の Flash 系の名前を確かめ、変わっていたら入れる |
+| `AI_DAILY_LIMIT`（任意） | 1日の回数の上限。入れなければ 20 |
+
+`SUPABASE_URL`・`SUPABASE_ANON_KEY`・`SUPABASE_SERVICE_ROLE_KEY` は Supabase が自動で入れるので、足さない。
+
+### 3. 配る（デプロイ）
+
+Supabase CLI を入れなくても、`npx` で配れる（Docker は要らない）。
+
+```
+npx supabase login
+npx supabase functions deploy gemini-report --project-ref （プロジェクトの ID） --use-api
+```
+
+プロジェクトの ID は、Project URL の `https://（ここ）.supabase.co` の部分。配ったら「Edge Functions → gemini-report」の **Verify JWT** がオンになっていることを確かめる（ログインしていない人は呼べない）。
+
+### 4. 確かめる
+
+ログインしたアプリで、分析画面の「AI に分析してもらう」を押す（T-32）。それまでは、ブラウザの開発者ツールのコンソールで次を実行して確かめる。
+
+```js
+const { aiReports } = await import('/src/lib/data/aiReport.ts')
+await aiReports.request({ teamId: '（チームの id）', scope: 'test', summary: { minSample: 10, serve: { total: { attempts: 12, efficiency: 10.0, reference: false } } } })
+```
+
+2回目は `cached: true` になる。エラーは「Edge Functions → gemini-report → Logs」で見る。
+
 ## キーの置き場所
 
 | キー | 置く場所 |
 | --- | --- |
 | Project URL、anon キー | `.env.local`（手元）と Vercel の環境変数。ブラウザに出てもよい |
 | service_role キー | どこにも置かない。Edge Functions では自動で使える |
-| Gemini・LINE のキー | Edge Functions のシークレット（第3回、T-30・T-33） |
+| Gemini・LINE のキー | Edge Functions のシークレット（Gemini は T-30、LINE は T-33） |
 | SMTP のパスワード（Gmail のアプリ パスワード、Brevo の SMTP キー） | Supabase の SMTP Settings にだけ入れる（T-03） |
