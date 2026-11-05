@@ -23,6 +23,7 @@ import {
   serveTypeTable,
   speedTable,
   splitPractice,
+  attackTableForScrimmage,
   type AnalysisData,
 } from './view.ts'
 
@@ -533,5 +534,83 @@ describe('範囲「練習」と紅白戦（5 章「紅白戦の個人成績」�
     const { scrimmage, drill } = splitPractice(sets, withScrimmage)
     expect(scrimmage.map((r) => r.setId)).toEqual(['s5'])
     expect(drill.map((r) => r.setId)).toEqual(['s4'])
+  })
+})
+
+describe('紅白戦：Bチームの部員（5 章「紅白戦の個人成績」、#71）', () => {
+  const sc: AnalysisData = {
+    ...data,
+    matches: [...data.matches, match('sc', { kind: 'scrimmage', opponentId: 'b1' })],
+    gameSets: [...data.gameSets, gameSet('s5', 'sc', 1)],
+    opponentPlayers: [{ id: 'b7', opponentId: 'b1', number: 7, playerId: 'p7' }],
+    records: [
+      ...data.records,
+      {
+        ...empty('s5'),
+        serves: [serve({ setId: 's5', serverId: 'p3', result: 'ace', reception: null, receiverId: 'b7' })],
+        // 相手サーバー b7（部員 p7）のサーブを受けた記録。b9 は部員と結ばれていない
+        receptions: [
+          {
+            kind: 'reception',
+            clientId: 'r1',
+            setId: 's5',
+            receiverId: 'p3',
+            oppServerId: 'b7',
+            oppServeType: null,
+            atX: null,
+            atY: null,
+            result: 'C',
+            recordedAt: '2026-11-05T00:00:00Z',
+          },
+          {
+            kind: 'reception',
+            clientId: 'r2',
+            setId: 's5',
+            receiverId: 'p3',
+            oppServerId: 'b9',
+            oppServeType: null,
+            atX: null,
+            atY: null,
+            result: 'ace',
+            recordedAt: '2026-11-05T00:00:00Z',
+          },
+        ],
+      },
+    ],
+  }
+  it('Bチームの記録を、その部員の記録として足す（部員と結ばれていない相手選手は入れない）', () => {
+    const { scrimmage } = splitPractice(recordsInScope({ kind: 'practice' }, sc), sc)
+    const r = scrimmage.find((x) => x.setId === 's5')
+    // サーブ：A の 1 本 ＋ B の部員 p7 の 1 本（C＝効果）。b9 は入らない
+    expect(r?.serves.map((x) => x.serverId)).toEqual(['p3', 'p7'])
+    // レシーブ：A の受けた 2 本 ＋ B の部員 p7 が受けた分（エースは受けた相手がないので 0 本）
+    expect(r?.receptions).toHaveLength(2)
+  })
+  it('部員の選手別表に A と B が合わさる', () => {
+    const { scrimmage } = splitPractice(recordsInScope({ kind: 'practice' }, sc), sc)
+    const t = playerTable('serve', scrimmage, sc.players)
+    // 渡辺（p7）は B のサーブ 1 本：C 1 本 → 効果 1 →（25）÷ 1 = 25%
+    const row = t.rows.find((x) => x.id === 'p7')
+    expect(row?.cells.map((c) => c.text)).toEqual(['1', '25.0%*', '0.0%*', '0.0%*'])
+  })
+  it('サーブの種類別の表には、種類が空の B のサーブを入れない（「その他」に混ぜない）', () => {
+    const parts = splitPractice(recordsInScope({ kind: 'practice' }, sc), sc)
+    // A の p3 のフローター 1 本 ＋ B の p7 の 1 本（種類が空）。種類別の表はフローターの行だけ
+    expect(serveTypeTable(parts.scrimmageForTypes).rows.map((r) => r.id)).toEqual(['float'])
+    // 全体と選手別の表には、種類が空の本数も入る
+    expect(parts.scrimmage.find((x) => x.setId === 's5')?.serves).toHaveLength(2)
+  })
+  it('opponentPlayers がなければ、Aの記録のまま', () => {
+    const none = { ...sc, opponentPlayers: undefined }
+    const { scrimmage } = splitPractice(recordsInScope({ kind: 'practice' }, none), none)
+    expect(scrimmage.find((x) => x.setId === 's5')?.serves).toHaveLength(1)
+  })
+  it('紅白戦のアタックの表は、効果率と失点の列を除く', () => {
+    const t = attackTableForScrimmage({
+      columns: ['打数', 'アタック決定率', '効果率', '失点'],
+      rows: [{ id: 'p7', label: '7 渡辺', cells: [1, 2, 3, 4].map((n) => ({ text: String(n), reference: false, negative: false })) }],
+    })
+    expect(t.columns).toEqual(['打数', 'アタック決定率'])
+    expect(t.rows[0]?.cells.map((c) => c.text)).toEqual(['1', '2'])
   })
 })

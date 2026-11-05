@@ -5,6 +5,7 @@ import type {
   GameSet,
   Match,
   Opponent,
+  OpponentPlayer,
   Player,
   ReceptionStats,
   ServeStats,
@@ -16,6 +17,10 @@ import { zoneOf } from '../../lib/court/index.ts'
 import {
   attackStatsByPlayer,
   attackStatsBySpeed,
+  bTeamAttacks,
+  bTeamReceptions,
+  bTeamServes,
+  oppPlayerMapOf,
   attackStatsOf,
   digLandingShare,
   digOriginShare,
@@ -43,6 +48,11 @@ export interface AnalysisData {
   matches: readonly Match[]
   gameSets: readonly GameSet[]
   records: readonly SetRecords[]
+  /**
+   * 相手選手。紅白戦のBチームの選手（playerId で部員と結ぶ）の成績を出すのに使う（F-27）。
+   * なければ（またはBチームの選手がいなければ）、紅白戦はAチーム側の記録だけで集計する
+   */
+  opponentPlayers?: readonly OpponentPlayer[]
 }
 
 /**
@@ -105,21 +115,60 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
 export function splitPractice(
   sets: readonly SetRecords[],
   data: AnalysisData,
-): { scrimmage: SetRecords[]; drill: SetRecords[] } {
+): { scrimmage: SetRecords[]; scrimmageForTypes: SetRecords[]; drill: SetRecords[] } {
   const matchById = new Map(data.matches.map((m) => [m.id, m]))
   const kindOfSet = new Map(data.gameSets.map((gs) => [gs.id, matchById.get(gs.matchId)?.kind]))
+  const members = oppPlayerMapOf(data.opponentPlayers ?? [])
+  const scrimmageSets = sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage')
   return {
-    scrimmage: sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage'),
+    scrimmage: scrimmageSets.map((r) => withBTeam(r, members)),
+    // サーブの種類別の表用。Bのサーブは種類が記録された本数だけ（空の本数を「その他」に混ぜない）
+    scrimmageForTypes: scrimmageSets.map((r) => withBTeam(r, members, true)),
     drill: sets.filter((r) => kindOfSet.get(r.setId) === 'practice'),
   }
 }
 
 /**
- * 紅白戦の画面の注。数え方が未決のBチームの成績は、まだ出していない（要件定義書 12 章「紅白戦の読み替えの規則」）。
- * 試合の選手別表と同じく、自チームのAの記録（サーブ・サーブレシーブ・アタック）で、その部員の成績を出す
+ * 紅白戦の記録に、Bチームの成績を足す（5 章「紅白戦の個人成績」）。Bの記録は、Aの記録を裏返したものを
+ * 「その部員の記録」の形に読み替えて足す（lib/stats の bTeamServes など）。部員が分かる本数だけが入る
  */
+function withBTeam(
+  r: SetRecords,
+  members: ReturnType<typeof oppPlayerMapOf>,
+  knownTypeOnly = false,
+): SetRecords {
+  if (members.size === 0) return r
+  return {
+    ...r,
+    serves: [...r.serves, ...bTeamServes(r.receptions, members, { knownTypeOnly })],
+    receptions: [...r.receptions, ...bTeamReceptions(r.serves, members)],
+    attacks: [...r.attacks, ...bTeamAttacks(r.oppAttacks ?? [], members)],
+  }
+}
+
+/** 紅白戦の画面の注。Aチーム側とBチーム側の記録を、その部員の成績に入れている（5 章「紅白戦の個人成績」） */
 export const SCRIMMAGE_NOTE =
-  '紅白戦は、Aチーム側（自チームとして記録した分）の記録で集計しています。Bチームに入った部員のBチームとしての成績は、数え方が決まっていないため、まだ含めていません。'
+  '紅白戦は、Aチーム側とBチーム側の記録を、その部員の成績として集計しています。Bチームの成績は、相手サーバー・受けた相手・打った相手選手が入っている記録だけが入ります（入っていない記録はどの部員にも入りません）。'
+
+/** レシーブのタブの注。Bチームのエースとミスは受けた相手が記録されないので、受数に入らない */
+export const SCRIMMAGE_RECEPTION_NOTE =
+  'Bチームのサーブレシーブ成功率は、受けた相手が記録されたA〜Dの本数だけなので、少し高めに出ることがあります（被エースは入りません）。'
+
+/** アタックのタブの注。被ブロックの記録がないので、Bチームの効果率と失点は出さない */
+export const SCRIMMAGE_ATTACK_NOTE =
+  'アタックは、Bチームに被ブロックの記録がないため、打数とアタック決定率だけを出しています。'
+
+/** 紅白戦のアタックの表から、効果率と失点の列を除く（Bチームの被ブロックが記録されないため） */
+const ATTACK_HIDDEN = new Set(['効果率', '失点'])
+export const attackMetricsForScrimmage = (metrics: readonly Metric[]): Metric[] =>
+  metrics.filter((m) => !ATTACK_HIDDEN.has(m.label))
+export function attackTableForScrimmage(t: Table): Table {
+  const keep = t.columns.map((c) => !ATTACK_HIDDEN.has(c))
+  return {
+    columns: t.columns.filter((_, i) => keep[i]),
+    rows: t.rows.map((r) => ({ ...r, cells: r.cells.filter((_, i) => keep[i]) })),
+  }
+}
 
 // ---- 表示用の値 ----
 
