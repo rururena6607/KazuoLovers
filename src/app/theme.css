@@ -175,7 +175,6 @@ button {
   font-size: 18px;
   font-weight: 700;
 }
-/* 選手のボタンは横にスクロール */
 /* 選手・背番号のボタン。横にはみ出さず折り返して、全員が見えるようにする */
 .chips {
   display: flex;
