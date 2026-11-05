@@ -9,6 +9,7 @@ import { MetricRow, StatTable } from './StatTable.tsx'
 import { emptySet, scoreTrend, setResults } from './setResults.ts'
 import {
   COURSE_NOTES,
+  SPEED_NOTE,
   TAB_LABELS,
   courseHeatmap,
   heatmap,
@@ -18,6 +19,7 @@ import {
   recordsInScope,
   scopeOptions,
   serveTypeTable,
+  speedTable,
   type AnalysisData,
   type Scope,
   type Tab,
@@ -118,6 +120,7 @@ export function AnalysisScreen({
             heat: tab === 'attack' ? null : heatmap(tab, sets),
             course: tab === 'attack' ? null : courseHeatmap(tab, sets),
             types: tab === 'serve' ? serveTypeTable(sets) : null,
+            speed: speedTable(tab, sets),
             players: playerTable(tab, sets, data.players),
           },
     [kind, tab, sets, data.players],
@@ -199,6 +202,12 @@ export function AnalysisScreen({
             </>
           )}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
+          {overview.speed && (
+            <>
+              <StatTable title="速さ別" nameHeader="速さ" table={overview.speed} />
+              <p className="an-note">{SPEED_NOTE}</p>
+            </>
+          )}
           <StatTable title="選手別" nameHeader="選手" table={overview.players} />
           {trend && <ScoreTrend rows={trend} />}
           <p className="an-note">{referenceNote}</p>
