@@ -9,3 +9,4 @@ export {
   serveStatsOf,
 } from './metrics.ts'
 export * from './aggregate.ts'
+export * from './course.ts'

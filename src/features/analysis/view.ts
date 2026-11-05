@@ -18,9 +18,11 @@ import {
   practiceStatsByPlayer,
   practiceStatsByTargetZone,
   practiceStatsOf,
+  receptionPositionShare,
   receptionStatsByPlayer,
   receptionStatsByZone,
   receptionStatsOf,
+  serveLandingShare,
   serveStatsByLandingZone,
   serveStatsByPlayer,
   serveStatsByType,
@@ -309,6 +311,30 @@ export function heatmap(tab: 'serve' | 'reception', sets: readonly SetRecords[])
     [...by].map(([zone, s]) => ({ zone, value: s.successRate, count: s.receptions })),
   )
 }
+
+/**
+ * コース割合のヒートマップ（要件定義書 5 章「コース」）。値は、座標のある記録の本数に対するそのゾーンの割合。
+ * サーブ：相手コートの着弾ゾーン別（自チームがどこに打てているか）。
+ * レシーブ：自コートの受けた位置別（相手がどこに打ってくるか）。アタックにはない。
+ * セルの本数はそのゾーンの本数で、10 本未満には「*」を付ける（ほかのヒートマップと同じ決まり）
+ */
+export function courseHeatmap(tab: 'serve' | 'reception', sets: readonly SetRecords[]): Heatmap {
+  const share =
+    tab === 'serve'
+      ? serveLandingShare(flat.serves(sets), zoneOf)
+      : receptionPositionShare(flat.receptions(sets), zoneOf)
+  return makeHeatmap(
+    tab === 'serve' ? 'opponent' : 'own',
+    'コース割合',
+    [...share.zones].map(([zone, z]) => ({ zone, value: z.share, count: z.count })),
+  )
+}
+
+/** コース割合の分母の説明（画面の注）。アウトとネットの扱いを隠さずに書く */
+export const COURSE_NOTES = {
+  serve: 'コース割合は、着弾点を記録したサーブに対する割合です（コートの外のアウトは含み、ネットは除く）。',
+  reception: 'コース割合は、受けた位置を記録したレシーブに対する割合です。',
+} as const
 
 // ---- 練習 ----
 

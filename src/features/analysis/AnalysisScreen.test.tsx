@@ -52,7 +52,11 @@ describe('AnalysisScreen', () => {
   it('ヒートマップに 6 つのゾーン番号と値（本数）を出す', () => {
     expect(html).toContain('100.0%*（1）')
     expect(html).toContain('−（0）')
-    expect((html.match(/class="an-zone[ "]/g) ?? []).length).toBe(6)
+    // ヒートマップは2つ（サーブ効果率とコース割合）で、どちらも 6 ゾーン
+    expect((html.match(/<figure class="an-heat"/g) ?? []).length).toBe(2)
+    expect((html.match(/class="an-zone[ "]/g) ?? []).length).toBe(12)
+    expect(html).toContain('コース割合')
+    expect(html).toContain('アウトは含み、ネットは除く')
   })
 
   it('参考値の説明を出す', () => {

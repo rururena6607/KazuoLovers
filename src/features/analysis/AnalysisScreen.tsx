@@ -4,7 +4,9 @@ import './analysis.css'
 import { Heatmap } from './Heatmap.tsx'
 import { MetricRow, StatTable } from './StatTable.tsx'
 import {
+  COURSE_NOTES,
   TAB_LABELS,
+  courseHeatmap,
   heatmap,
   overallMetrics,
   playerTable,
@@ -76,6 +78,7 @@ export function AnalysisScreen({ data }: { data: AnalysisData }) {
         : {
             metrics: overallMetrics(tab, sets),
             heat: tab === 'attack' ? null : heatmap(tab, sets),
+            course: tab === 'attack' ? null : courseHeatmap(tab, sets),
             types: tab === 'serve' ? serveTypeTable(sets) : null,
             players: playerTable(tab, sets, data.players),
           },
@@ -140,6 +143,12 @@ export function AnalysisScreen({ data }: { data: AnalysisData }) {
 
           <MetricRow metrics={overview.metrics} />
           {overview.heat && <Heatmap map={overview.heat} />}
+          {overview.course && (
+            <>
+              <Heatmap map={overview.course} />
+              <p className="an-note">{tab === 'serve' ? COURSE_NOTES.serve : COURSE_NOTES.reception}</p>
+            </>
+          )}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
           <StatTable title="選手別" nameHeader="選手" table={overview.players} />
           <p className="an-note">{referenceNote}</p>
