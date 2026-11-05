@@ -358,7 +358,7 @@ button {
   fill: var(--surface);
 }
 .court-zone {
-  opacity: 0.16;
+  opacity: 0.08; /* 選手の色の点（F-22）が目立つように薄く塗る */
 }
 .court-highlight {
   fill: none;
@@ -396,6 +396,22 @@ button {
   fill: var(--ink);
   stroke: var(--surface);
   stroke-width: 0.8;
+}
+
+/* 選手の色の点（F-22）。色だけに頼らず背番号を白で書く。白いふちでゾーンの色から浮かせる */
+.court-player-mark {
+  pointer-events: none;
+}
+.court-player-mark circle {
+  stroke: #ffffff;
+  stroke-width: 0.6;
+}
+.court-player-mark text {
+  fill: #ffffff;
+  font-size: 3.6px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
 .placeholder {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import Court from '../../components/Court.tsx'
+import Court, { type CourtMark } from '../../components/Court.tsx'
 import type { OpponentPlayer, Player, ServeRecord } from '../../contracts/index.ts'
 import AddOppNumber from './AddOppNumber.tsx'
 import EndlinePicker from './EndlinePicker.tsx'
@@ -27,9 +27,19 @@ interface Props {
   removed: ReadonlySet<string>
   /** 相手の背番号をその場で足す（F-04）。足せないときは undefined */
   onAddOpp?: (number: number) => Promise<OpponentPlayer>
+  /** 直前のサーブの着弾点（選手の色と背番号。F-22） */
+  recentMarks?: readonly CourtMark[]
 }
 
-export default function ServePanel({ setId, players, oppPlayers, onSave, removed, onAddOpp }: Props) {
+export default function ServePanel({
+  setId,
+  players,
+  oppPlayers,
+  onSave,
+  removed,
+  onAddOpp,
+  recentMarks = [],
+}: Props) {
   const [draft, setDraft] = useState<ServeDraft>(emptyDraft)
   const [pickingMiss, setPickingMiss] = useState(false)
   /** 受けた相手をあとから付け足せる直前の1本。次の1本の入力を始めたら null */
@@ -107,7 +117,7 @@ export default function ServePanel({ setId, players, oppPlayers, onSave, removed
       <Court
         side="opponent"
         label="相手コート（着弾点）"
-        marks={draft.to ? [draft.to] : []}
+        marks={draft.to ? [...recentMarks, draft.to] : recentMarks}
         onTap={(p) => {
           // ネットより手前（自コート側の余白）は着弾点にしない
           if (p.y >= 0) update({ to: p })

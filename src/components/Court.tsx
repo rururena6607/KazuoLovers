@@ -20,10 +20,16 @@ import {
 // ゾーン番号つきのコート図（要件定義書 6 章「ゾーン番号を常に表示」）。
 // 相手コートはネットが下、自コートはネットが上。周りの余白はアウトとしてタップできる。
 
+/** 印。color と label があれば選手の色の点に背番号を書く（F-22）。なければ入力中の黒い点 */
+export interface CourtMark extends CourtPoint {
+  color?: string
+  label?: string
+}
+
 interface Props {
   side: CourtSide
-  /** 印を付ける点（着弾点など） */
-  marks?: readonly CourtPoint[]
+  /** 印を付ける点（着弾点など）。あとのものほど上に描く */
+  marks?: readonly CourtMark[]
   /** 塗るゾーン（練習モードの狙ったゾーン） */
   highlightZone?: number | null
   onTap?: (p: CourtPoint) => void
@@ -101,7 +107,15 @@ export default function Court({ side, marks = [], highlightZone = null, onTap, l
       {highlight && <rect {...highlight} className="court-highlight" />}
       {marks.map((m, i) => {
         const p = courtToSvg(side, m)
-        return <circle key={i} cx={p.x} cy={p.y} r={2.6} className="court-mark" />
+        if (m.color === undefined || m.label === undefined) {
+          return <circle key={i} cx={p.x} cy={p.y} r={2.6} className="court-mark" />
+        }
+        return (
+          <g key={i} className="court-player-mark" transform={`translate(${p.x} ${p.y})`}>
+            <circle r={3.6} style={{ fill: m.color }} />
+            <text>{m.label}</text>
+          </g>
+        )
       })}
     </svg>
   )
