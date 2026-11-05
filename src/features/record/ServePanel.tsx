@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Court, { type CourtMark } from '../../components/Court.tsx'
+import type { ColSplits } from '../../components/courtGeometry.ts'
 import type { OpponentPlayer, Player, ServeRecord } from '../../contracts/index.ts'
 import AddOppNumber from './AddOppNumber.tsx'
 import EndlinePicker from './EndlinePicker.tsx'
@@ -30,6 +31,12 @@ interface Props {
   onAddOpp?: (number: number) => Promise<OpponentPlayer>
   /** 直前のサーブの着弾点（選手の色と背番号。F-22） */
   recentMarks?: readonly CourtMark[]
+  /** このセットの相手コートの列の境目（F-24） */
+  colSplits?: ColSplits
+  /** 点線を動かしたとき。なければ動かせない */
+  onColSplitsChange?: (splits: ColSplits) => void
+  /** 点線を離したとき */
+  onColSplitsCommit?: (splits: ColSplits) => void
 }
 
 export default function ServePanel({
@@ -40,6 +47,9 @@ export default function ServePanel({
   removed,
   onAddOpp,
   recentMarks = [],
+  colSplits,
+  onColSplitsChange,
+  onColSplitsCommit,
 }: Props) {
   const [draft, setDraft] = useState<ServeDraft>(emptyDraft)
   const [pickingMiss, setPickingMiss] = useState(false)
@@ -118,6 +128,9 @@ export default function ServePanel({
       <Court
         side="opponent"
         label="相手コート（着弾点）"
+        colSplits={colSplits}
+        onColSplitsChange={onColSplitsChange}
+        onColSplitsCommit={onColSplitsCommit}
         marks={draft.to ? [...recentMarks, draft.to] : recentMarks}
         onTap={(p) => {
           // ネットより手前（自コート側の余白）は着弾点にしない

@@ -7,6 +7,7 @@ import type {
   SetRecords,
   Side,
 } from '../../contracts/index.ts'
+import { colSplitsOf, type ColSplits } from '../../components/courtGeometry.ts'
 import { playerColorMap } from '../../components/playerColors.ts'
 import { toggleServing } from '../../lib/rally/index.ts'
 import { loadBestOf, saveBestOf, type BestOf } from './bestOf.ts'
@@ -45,6 +46,11 @@ interface Props {
   onAddOpp?: (number: number) => Promise<OpponentPlayer>
   /** 練習モード（F-10）に切り替える。なければボタンを出さない */
   onPractice?: () => void
+  /**
+   * 相手コートの列の境目を保存する（F-24。GameSet の colSplit1・colSplit2）。
+   * なければ、動かした境目はこの画面のあいだだけ残る（保存の約束は contracts にまだない）
+   */
+  onSaveColSplits?: (setId: string, splits: ColSplits) => Promise<void>
 }
 
 /** ラリー中に開いている入力：自チームのアタック・相手のスパイク（F-25）・直前の1本への付け足し。null は閉じている */
@@ -62,7 +68,14 @@ const panelOf = (rec: PlayRecord): Side | null =>
 const canAttach = (rec: PlayRecord): boolean =>
   rec.kind === 'reception' || (rec.kind === 'serve' && rec.result === 'in')
 
-export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractice }: Props) {
+export default function RecordScreen({
+  repo,
+  ctx,
+  onNextSet,
+  onAddOpp,
+  onPractice,
+  onSaveColSplits,
+}: Props) {
   const { match, opponent } = ctx
   const [saveError, setSaveError] = useState<string | null>(null)
   const onError = useCallback((e: unknown) => {
@@ -112,6 +125,18 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
   const oppPlayers = ctx.opponentPlayers
   /** 選手ごとの色（F-22）。引退した選手も含めて決めるので、分析画面と同じ色になる */
   const colors = useMemo(() => playerColorMap(ctx.players), [ctx.players])
+
+  /** 動かした列の境目（セットの id → 境目）。まだ動かしていないセットは GameSet の値か 3 等分（F-24） */
+  const [movedSplits, setMovedSplits] = useState<ReadonlyMap<string, ColSplits>>(new Map())
+  const colSplits = movedSplits.get(set.id) ?? colSplitsOf(set)
+  const moveSplits = (splits: ColSplits) => setMovedSplits((m) => new Map(m).set(set.id, splits))
+  const commitSplits = (splits: ColSplits) => {
+    if (!onSaveColSplits) return
+    onSaveColSplits(set.id, splits).catch((e: unknown) => {
+      console.error(e)
+      setSaveError('列の境目を保存できませんでした。もう一度動かしてください')
+    })
+  }
 
   const records = recordsOf(set.id)
   /** このセットの直前のサーブの着弾点（F-22「記録画面は直前の数本」） */
@@ -409,6 +434,7 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
               setId={set.id}
               players={activePlayers}
               prevReception={prevReceptionOf(lastPlay)}
+              colSplits={colSplits}
               onSave={savePlay}
             />
           </div>
@@ -435,6 +461,9 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
             removed={removed}
             onAddOpp={onAddOpp}
             recentMarks={recentMarks}
+            colSplits={colSplits}
+            onColSplitsChange={moveSplits}
+            onColSplitsCommit={commitSplits}
           />
         </div>
         <div hidden={showList || showRallyInput || shown !== 'opp'}>
