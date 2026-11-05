@@ -42,7 +42,8 @@ export interface Match {
   teamId: string
   /**
    * match＝ふつうの試合、practice＝サーブ練習、
-   * scrimmage＝部内の紅白戦（両チームとも自チームの選手。B チームは opponentId の相手チームとして持つ）
+   * scrimmage＝部内の紅白戦（両チームとも自チームの選手。B チームは opponentId の相手チームとして持つ）。
+   * B チームの相手チームは、試合ごとに作る前提（使い回すと、顔ぶれが変わったとき playerId の対応がずれる。docs 12章で未決）
    */
   kind: 'match' | 'practice' | 'scrimmage'
   /** 練習は null。紅白戦は B チームを表す相手チーム（名前の既定は「紅白戦（B チーム）」） */
@@ -62,7 +63,8 @@ export interface GameSet {
   oppScore: number
   /**
    * 相手コートの列の境目（0.0〜1.0。左の列と中の列、中の列と右の列の間）。セットごとに動かせる。
-   * 未設定のときは config の DEFAULT_COL_SPLITS（3 等分）
+   * 未設定のときは config の DEFAULT_COL_SPLITS（3 等分）。
+   * 0 ≤ colSplit1 < colSplit2 ≤ 1 を守る。片方だけ設定するのは不可（両方そろえて設定するか、両方未設定）
    */
   colSplit1?: number
   colSplit2?: number

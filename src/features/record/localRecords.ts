@@ -16,7 +16,8 @@ const listOf = (s: SetRecords, rec: AnyRecord): AnyRecord[] => {
     case 'attack':
       return s.attacks
     case 'opp_attack':
-      return s.oppAttacks ?? []
+      // 古いデータでは未設定のことがあるので、なければ作ってから返す（push した記録を落とさない）
+      return (s.oppAttacks ??= [])
     case 'point':
       return s.points
   }
@@ -32,6 +33,7 @@ export function overlay(remote: readonly SetRecords[], local: LocalChanges): Set
       serves: s.serves.filter((r) => !local.has(r.clientId)),
       receptions: s.receptions.filter((r) => !local.has(r.clientId)),
       attacks: s.attacks.filter((r) => !local.has(r.clientId)),
+      oppAttacks: (s.oppAttacks ?? []).filter((r) => !local.has(r.clientId)),
       points: s.points.filter((r) => !local.has(r.clientId)),
     })
   }
@@ -39,7 +41,7 @@ export function overlay(remote: readonly SetRecords[], local: LocalChanges): Set
     if (!rec) continue
     let s = bySet.get(rec.setId)
     if (!s) {
-      s = { setId: rec.setId, serves: [], receptions: [], attacks: [], points: [] }
+      s = { setId: rec.setId, serves: [], receptions: [], attacks: [], oppAttacks: [], points: [] }
       bySet.set(rec.setId, s)
     }
     // kind と配列の型は listOf で対応している
@@ -49,6 +51,7 @@ export function overlay(remote: readonly SetRecords[], local: LocalChanges): Set
     s.serves.sort(byRecordedAt)
     s.receptions.sort(byRecordedAt)
     s.attacks.sort(byRecordedAt)
+    s.oppAttacks?.sort(byRecordedAt)
     s.points.sort(byRecordedAt)
   }
   return [...bySet.values()]
@@ -61,7 +64,7 @@ export function prune(local: LocalChanges, remote: readonly SetRecords[]): Local
   if (local.size === 0) return local
   const found = new Map<string, AnyRecord>()
   for (const s of remote) {
-    for (const r of [...s.serves, ...s.receptions, ...s.attacks, ...s.points]) found.set(r.clientId, r)
+    for (const r of [...s.serves, ...s.receptions, ...s.attacks, ...(s.oppAttacks ?? []), ...s.points]) found.set(r.clientId, r)
   }
   const next = new Map(local)
   for (const [id, rec] of local) {
