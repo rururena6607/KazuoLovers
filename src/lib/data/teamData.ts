@@ -187,13 +187,11 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
           .returns<OpponentRow[]>(),
         db()
           .from('matches')
-          .select('opponent_id')
+          .select('kind,opponent_id')
           .eq('team_id', teamId)
-          .eq('kind', 'scrimmage')
-          .returns<{ opponent_id: string | null }[]>(),
+          .returns<{ kind: Match['kind']; opponent_id: string | null }[]>(),
       ])
-      const opponents = check(rows).map(opponentFromRow)
-      return withoutScrimmageTeams(opponents, check(scrimmages).map((m) => m.opponent_id))
+      return withoutScrimmageTeams(check(rows).map(opponentFromRow), check(scrimmages))
     },
     async createOpponent(teamId, name) {
       const opponentName = name.trim()
@@ -295,8 +293,13 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
           ),
         )
       } catch (e) {
-        // 試合を作れなかったら、さっき作った B チームを残さない
-        if (createdTeamId) await db().from('opponents').delete().eq('id', createdTeamId)
+        // 試合を作れなかったら、さっき作った B チームを残さない。消せなかったら、そのことも伝える
+        if (createdTeamId) {
+          const { error } = await db().from('opponents').delete().eq('id', createdTeamId)
+          if (error) {
+            throw new Error('試合を作れませんでした。作りかけの B チームも片づけられませんでした（一覧には出ません）。')
+          }
+        }
         throw e
       }
       // 第1セットを作れなくても、試合は残る。記録画面で開くときに createNextSet で作り直せる
@@ -321,8 +324,15 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
         await db().from('matches').select('id').eq('opponent_id', match.opponent_id).returns<{ id: string }[]>(),
       )
       if (rest.length === 0) {
-        const { error } = await db().from('opponents').delete().eq('id', match.opponent_id)
-        if (error) throw new Error(toDataErrorMessage(error))
+        // 既定の名前の相手だけ消す（ふつうの相手チームを、巻き込んで消さない）
+        const { error } = await db()
+          .from('opponents')
+          .delete()
+          .eq('id', match.opponent_id)
+          .eq('name', SCRIMMAGE_TEAM_NAME)
+        if (error) {
+          throw new Error('試合は削除しました。B チームの片づけだけ失敗しました（一覧には出ません）。')
+        }
       }
     },
     listSets,
