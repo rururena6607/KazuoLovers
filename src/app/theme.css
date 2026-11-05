@@ -15,6 +15,13 @@
   --font: system-ui, 'Hiragino Sans', 'Yu Gothic', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --border: 2px solid var(--line);
+  /* ゾーン①〜⑥の色（部活フィードバック：エリアごとに色を変える）。分析のヒートマップでも同じ色を使う */
+  --zone-1: #d64545;
+  --zone-2: #e08a1e;
+  --zone-3: #b59a00;
+  --zone-4: #2e9e5b;
+  --zone-5: #2f7fd1;
+  --zone-6: #8a4fc4;
   --tabbar-h: 56px;
   color-scheme: light;
 }
@@ -266,6 +273,11 @@ button {
   font-size: 13px;
   font-weight: 700;
 }
+/* 相手が打ってくる番。自チームの攻撃と見分けられるよう線を変える */
+.rally-hint.is-opp {
+  border-left-style: dashed;
+  color: var(--mute);
+}
 
 /* 下部：直前の1本と取消（F-08） */
 .record-foot {
@@ -346,9 +358,13 @@ button {
 .court-floor {
   fill: var(--surface);
 }
+.court-zone {
+  opacity: 0.16;
+}
 .court-highlight {
-  fill: var(--selected);
-  opacity: 0.25;
+  fill: none;
+  stroke: var(--selected);
+  stroke-width: 1.6;
 }
 .court-line {
   fill: none;
@@ -364,6 +380,9 @@ button {
   stroke: var(--line);
   stroke-width: 2;
 }
+.court-zone-num {
+  font-weight: 700;
+}
 .court-zone-num,
 .endline-num {
   fill: var(--mute);
@@ -375,7 +394,7 @@ button {
   font-size: 5px;
 }
 .court-mark {
-  fill: var(--bad);
+  fill: var(--ink);
   stroke: var(--surface);
   stroke-width: 0.8;
 }

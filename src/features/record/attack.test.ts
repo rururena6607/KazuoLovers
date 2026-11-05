@@ -4,6 +4,7 @@ import {
   buildAttack,
   emptyAttackDraft,
   prevReceptionOf,
+  rallyTurnOf,
   withAttackType,
   type AttackDraft,
 } from './attack.ts'
@@ -103,5 +104,31 @@ describe('withAttackType', () => {
   })
   it('ほかの種類では、手で選んだバックアタックを残す', () => {
     expect(withAttackType({ ...draft, isBack: true }, 'right')).toMatchObject({ isBack: true })
+  })
+})
+
+describe('rallyTurnOf（T-36 部活フィードバック）', () => {
+  it('自チームのレシーブのあとは自チームが打つ番', () => {
+    expect(rallyTurnOf(reception('A', 1))).toBe('us')
+  })
+  it('自チームのサーブのあとは相手が打ってくる番（アタック欄を先に出さない）', () => {
+    expect(rallyTurnOf(serveIn(1))).toBe('opp')
+  })
+  it('自チームのアタックが継続したあとも相手の番', () => {
+    const cont: AttackRecord = {
+      kind: 'attack',
+      clientId: 'a0',
+      setId: 's1',
+      attackerId: 'p7',
+      attackType: null,
+      isBack: false,
+      toX: null,
+      toY: null,
+      result: 'continue',
+      prevReception: null,
+      recordedAt: t(2),
+    }
+    expect(rallyTurnOf(cont)).toBe('opp')
+    expect(rallyTurnOf(null)).toBe('opp')
   })
 })

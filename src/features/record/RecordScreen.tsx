@@ -4,7 +4,7 @@ import { toggleServing } from '../../lib/rally/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_OPP_PLAYERS, DEMO_PLAYERS, DEMO_SETS } from './demo.ts'
 import { describeEntry, entriesOf, idsToRemove, relinkAttacks, type Entry } from './history.ts'
 import { newIds } from './ids.ts'
-import { prevReceptionOf } from './attack.ts'
+import { prevReceptionOf, rallyTurnOf } from './attack.ts'
 import RallyPanel from './RallyPanel.tsx'
 import ReceptionPanel from './ReceptionPanel.tsx'
 import RecordList from './RecordList.tsx'
@@ -30,6 +30,9 @@ interface Props {
   /** 練習モード（F-10）に切り替える */
   onPractice: () => void
 }
+
+/** ラリー中に開いている入力。null は閉じている（相手の攻撃中） */
+type RallyTab = 'attack' | 'serve' | null
 
 const hasRecords = (r: SetRecords | undefined): boolean =>
   !!r && r.serves.length + r.receptions.length + r.attacks.length + r.points.length > 0
@@ -63,8 +66,11 @@ export default function RecordScreen({ repo, onPractice }: Props) {
   const [showList, setShowList] = useState(false)
   /** 取消・削除した clientId。入力欄の「直前の1本」が消えたら付け足しをやめる */
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set())
-  /** ラリー中に出す入力：アタック（T-40）か、直前のサーブ・レシーブへの付け足し */
-  const [rallyTab, setRallyTab] = useState<'attack' | 'serve'>('attack')
+  /**
+   * ラリー中に開いた入力：アタック（T-40）か、直前のサーブ・レシーブへの付け足し。null なら閉じている。
+   * どの1本のあとに開いたか（after）も持ち、次の1本が入ったら初めの状態（相手の番なら閉じる）に戻す
+   */
+  const [rallyChoice, setRallyChoice] = useState<{ after: string; tab: RallyTab } | null>(null)
 
   const recordsOf = (setId: string) => sets.find((s) => s.setId === setId)
   // いまのセットは記録から決める（記録がある最後のセット）。画面を開き直しても第1セットに戻らない
@@ -91,6 +97,18 @@ export default function RecordScreen({ repo, onPractice }: Props) {
   const lastPlay = records ? latestOf<PlayRecord>(records.serves, records.receptions, records.attacks) : null
   const shown = view ?? state.serving
   const rally = inRally(lastPlay, points)
+  /** 相手が打ってくる番か。自チームのサーブのあとはアタック欄を閉じておく（部活フィードバック） */
+  const turn = rallyTurnOf(lastPlay)
+  const rallyTab: RallyTab =
+    lastPlay && rallyChoice?.after === lastPlay.clientId
+      ? rallyChoice.tab
+      : turn === 'us'
+        ? 'attack'
+        : null
+  /** 押したタブを開く。開いているタブを押し直したら閉じる */
+  const openRallyTab = (tab: Exclude<RallyTab, null>) => {
+    if (lastPlay) setRallyChoice({ after: lastPlay.clientId, tab: tab === rallyTab ? null : tab })
+  }
   const showAttack = rally && rallyTab === 'attack' && !showList
 
   const savePlay = (rec: PlayRecord) => {
@@ -105,8 +123,6 @@ export default function RecordScreen({ repo, onPractice }: Props) {
     // セットが終わったあとは得点を足さない（26-23 を作らない。lib/rally の applyPointInSet と同じ考え）
     if (pt && !winner) save(pt)
     setView(null)
-    // 新しいサーブ・レシーブのあとにラリーになったら、まずアタックの入力を出す
-    if (rec.kind !== 'attack') setRallyTab('attack')
   }
 
   const plus = (side: Side) => {
@@ -246,21 +262,25 @@ export default function RecordScreen({ repo, onPractice }: Props) {
 
       {rally && !showList && (
         <>
-          <p className="rally-hint">ラリー中：アタックを記録するか、得点したチームの数字をタップ</p>
+          <p className={turn === 'us' ? 'rally-hint' : 'rally-hint is-opp'}>
+            {turn === 'us'
+              ? 'ラリー中（自チームの攻撃）：アタックを記録するか、得点したチームの数字をタップ'
+              : 'ラリー中（相手の攻撃）：相手のスパイクを拾って打ち返したら「自チームのアタック」。決まったら得点したチームの数字をタップ'}
+          </p>
           <div className="row seg" role="group" aria-label="ラリー中の入力">
             <button
               type="button"
               className="btn btn-sm"
               aria-pressed={rallyTab === 'attack'}
-              onClick={() => setRallyTab('attack')}
+              onClick={() => openRallyTab('attack')}
             >
-              アタック
+              自チームのアタック
             </button>
             <button
               type="button"
               className="btn btn-sm"
               aria-pressed={rallyTab === 'serve'}
-              onClick={() => setRallyTab('serve')}
+              onClick={() => openRallyTab('serve')}
             >
               {shown === 'us' ? 'サーブ' : 'レシーブ'}（付け足し）
             </button>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Court from '../../components/Court.tsx'
-import { allZones } from '../../components/courtGeometry.ts'
+import { allZones, zoneColor } from '../../components/courtGeometry.ts'
 import {
   MIN_SAMPLE,
   type RecordRepository,
@@ -142,6 +142,7 @@ export default function PracticeScreen({ repo, onExit }: Props) {
             key={z}
             type="button"
             className="btn btn-sm num"
+            style={{ borderBottom: `4px solid ${zoneColor(z)}` }}
             aria-pressed={targetZone === z}
             onClick={() => setTargetZone(toggle(targetZone, z))}
           >

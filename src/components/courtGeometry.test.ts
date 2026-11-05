@@ -6,6 +6,7 @@ import {
   allZones,
   courtToSvg,
   svgToCourt,
+  zoneColor,
   zoneLabel,
 } from './courtGeometry.ts'
 
@@ -44,5 +45,17 @@ describe('zoneLabel / allZones', () => {
   it('ZONES からゾーン番号を小さい順に並べる', () => {
     expect(allZones('opponent')).toEqual([1, 2, 3, 4, 5, 6])
     expect(allZones('own')).toEqual([1, 2, 3, 4, 5, 6])
+  })
+})
+
+describe('zoneColor', () => {
+  it('ゾーン1〜6はそれぞれ別の色', () => {
+    const colors = [1, 2, 3, 4, 5, 6].map(zoneColor)
+    expect(new Set(colors).size).toBe(6)
+    expect(zoneColor(5)).toBe('var(--zone-5)')
+  })
+  it('1〜6 以外は文字の色', () => {
+    expect(zoneColor(0)).toBe('var(--ink)')
+    expect(zoneColor(7)).toBe('var(--ink)')
   })
 })

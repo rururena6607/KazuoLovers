@@ -42,6 +42,10 @@ export function eventToSvg(e: MouseEvent<SVGSVGElement>): CourtPoint | null {
   return { x: pt.x, y: pt.y }
 }
 
+/** ゾーンの色（theme.css の --zone-1〜--zone-6）。1〜6 以外は文字の色 */
+export const zoneColor = (zone: number): string =>
+  zone >= 1 && zone <= 6 ? `var(--zone-${zone})` : 'var(--ink)'
+
 /** ゾーン番号の丸数字 */
 export const zoneLabel = (zone: number): string => '①②③④⑤⑥⑦⑧⑨'[zone - 1] ?? String(zone)
 
