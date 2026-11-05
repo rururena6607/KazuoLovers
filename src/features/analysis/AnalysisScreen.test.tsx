@@ -204,8 +204,46 @@ describe('AnalysisScreen（範囲「練習」：紅白戦をメインに、サ�
     // 紅白戦：エース1・ミス1 の2本 →（100 − 25）÷ 2 = 37.5%
     expect(html).toContain('37.5%*')
   })
-  it('Bチームの成績は含めていないことを注で伝える', () => {
-    expect(html).toContain('Bチームに入った部員のBチームとしての成績')
+  it('Bチームの成績の入り方を注で伝える', () => {
+    expect(html).toContain('Aチーム側とBチーム側の記録を、その部員の成績として集計')
+  })
+  describe('Bチームの部員（opponentPlayers で部員と結ぶ）', () => {
+    // 紅白戦 s5：Aのサーブ 2 本（エース・ミス）に加えて、相手サーバー b7（＝部員 p7）のサーブをAが受けた記録（被エース）1 本
+    // 部員 p7 のサーブ：エース2・ミス1 の 3 本 →（200 − 25）÷ 3 ≒ 58.3%
+    const withB: AnalysisData = {
+      ...practiceData,
+      opponentPlayers: [{ id: 'b7', opponentId: 'b1', number: 7, playerId: 'p7' }],
+      records: practiceData.records.map((r) =>
+        r.setId === 's5'
+          ? {
+              ...r,
+              receptions: [
+                {
+                  kind: 'reception' as const,
+                  clientId: 'rb1',
+                  setId: 's5',
+                  receiverId: 'p7',
+                  oppServerId: 'b7',
+                  oppServeType: null,
+                  atX: null,
+                  atY: null,
+                  result: 'ace' as const,
+                  recordedAt: '2026-11-05T00:00:00Z',
+                },
+              ],
+            }
+          : r,
+      ),
+    }
+    it('Bチームのサーブを、その部員のサーブに足す', () => {
+      const out = renderToString(<AnalysisScreen data={withB} initialScope={{ kind: 'practice' }} />)
+      expect(out).toContain('58.3%*')
+      // エース率：3 本中エース 2 本 ≒ 66.7%
+      expect(out).toContain('66.7%*')
+    })
+    it('opponentPlayers がなければ、Aチーム側だけ', () => {
+      expect(html).toContain('37.5%*')
+    })
   })
   it('試合の全体には、紅白戦もサーブ練習も入らない', () => {
     const all = renderToString(<AnalysisScreen data={practiceData} />)
