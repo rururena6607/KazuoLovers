@@ -11,10 +11,12 @@ import type {
   ServeStats,
   ServeType,
   SetRecords,
+  Speed,
 } from '../../contracts/index.ts'
 import { zoneOf } from '../../lib/court/index.ts'
 import {
   attackStatsByPlayer,
+  attackStatsBySpeed,
   bTeamAttacks,
   bTeamReceptions,
   bTeamServes,
@@ -33,6 +35,7 @@ import {
   serveLandingShare,
   serveStatsByLandingZone,
   serveStatsByPlayer,
+  serveStatsBySpeed,
   serveStatsByType,
   serveStatsOf,
   type PracticeStats,
@@ -313,6 +316,32 @@ export function serveTypeTable(sets: readonly SetRecords[]): Table {
     })),
   }
 }
+
+export const SPEED_LABELS: Record<Speed, string> = { fast: '速い', slow: '遅い' }
+
+/**
+ * 速さ別の表（F-26）。サーブ・アタックの全体指標と同じ式で出す（5 章「速さ別の成績」）。
+ * 速さを入れなかった本数は、どちらにも入れない。速さを入れた記録がなければ null（レシーブにはない）
+ */
+export function speedTable(tab: Tab, sets: readonly SetRecords[]): Table | null {
+  const rowsOf = <S,>(by: Map<Speed, S>, cellsOf: (s: S) => Cells): TableRow[] =>
+    [...by].map(([speed, s]) => ({ id: speed, label: SPEED_LABELS[speed], cells: cellsOf(s).cells }))
+  switch (tab) {
+    case 'serve': {
+      const rows = rowsOf(serveStatsBySpeed(flat.serves(sets)), serveCells)
+      return rows.length === 0 ? null : { columns: SERVE_COLUMNS, rows }
+    }
+    case 'attack': {
+      const rows = rowsOf(attackStatsBySpeed(flat.attacks(sets)), attackCells)
+      return rows.length === 0 ? null : { columns: ATTACK_COLUMNS, rows }
+    }
+    case 'reception':
+      return null
+  }
+}
+
+/** 速さ別の表の注。速さは任意項目なので、入れなかった本数は含まれない */
+export const SPEED_NOTE = '速さ別は、速さを入力した本数だけで集計しています（入力していない本数は含めません）。'
 
 // ---- ヒートマップ ----
 

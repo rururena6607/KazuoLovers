@@ -13,6 +13,7 @@ import {
   SCRIMMAGE_ATTACK_NOTE,
   SCRIMMAGE_NOTE,
   SCRIMMAGE_RECEPTION_NOTE,
+  SPEED_NOTE,
   TAB_LABELS,
   attackMetricsForScrimmage,
   attackTableForScrimmage,
@@ -26,6 +27,7 @@ import {
   scopeOptions,
   splitPractice,
   serveTypeTable,
+  speedTable,
   type AnalysisData,
   type Scope,
   type Tab,
@@ -133,6 +135,8 @@ export function AnalysisScreen({
       course: tab === 'attack' ? null : courseHeatmap(tab, matchLike),
       dig: tab === 'reception' ? digView(matchLike) : null,
       types: tab === 'serve' ? serveTypeTable(matchLike) : null,
+      // 紅白戦のアタックは、Bチームに被ブロックの記録がないので、速さ別の表も効果率と失点を除く
+      speed: ((t) => (t && parts && tab === 'attack' ? attackTableForScrimmage(t) : t))(speedTable(tab, matchLike)),
       players:
         parts && tab === 'attack'
           ? attackTableForScrimmage(playerTable(tab, matchLike, data.players))
@@ -225,6 +229,12 @@ export function AnalysisScreen({
             </section>
           )}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
+          {overview.speed && (
+            <>
+              <StatTable title="速さ別" nameHeader="速さ" table={overview.speed} />
+              <p className="an-note">{SPEED_NOTE}</p>
+            </>
+          )}
           <StatTable title="選手別" nameHeader="選手" table={overview.players} />
           {trend && <ScoreTrend rows={trend} />}
           <p className="an-note">{referenceNote}</p>
