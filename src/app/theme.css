@@ -175,6 +175,12 @@ button {
   font-size: 18px;
   font-weight: 700;
 }
+/* 結果ボタンのうち文字の多いもの（相手のスパイクの「拾えず」「相手ミス」） */
+.results > .btn-word {
+  flex-grow: 1.8;
+  font-size: 15px;
+  white-space: nowrap;
+}
 /* 選手・背番号のボタン。横にはみ出さず折り返して、全員が見えるようにする */
 .chips {
   display: flex;
@@ -395,6 +401,29 @@ button {
 .court-mark {
   fill: var(--ink);
   stroke: var(--surface);
+  stroke-width: 0.8;
+}
+
+/* 両面のコート図（矢印）。縦に長いので、375px で入力欄が画面に収まるよう幅を抑える */
+.court-full {
+  max-width: 300px;
+  margin: 0 auto;
+}
+.court-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--mute);
+}
+.court-arrow {
+  stroke: var(--ink);
+  stroke-width: 1.2;
+}
+.court-arrow-head {
+  fill: var(--ink);
+}
+.court-arrow-from {
+  fill: var(--surface);
+  stroke: var(--ink);
   stroke-width: 0.8;
 }
 

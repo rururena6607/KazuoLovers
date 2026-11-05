@@ -13,6 +13,7 @@ import { loadBestOf, saveBestOf, type BestOf } from './bestOf.ts'
 import { describeEntry, entriesOf, idsToRemove, relinkAttacks, type Entry } from './history.ts'
 import { newIds } from './ids.ts'
 import { prevReceptionOf, rallyTurnOf } from './attack.ts'
+import DigPanel from './DigPanel.tsx'
 import RallyPanel from './RallyPanel.tsx'
 import { recentServeMarks } from './recentMarks.ts'
 import ReceptionPanel from './ReceptionPanel.tsx'
@@ -46,11 +47,12 @@ interface Props {
   onPractice?: () => void
 }
 
-/** ラリー中に開いている入力。null は閉じている（相手の攻撃中） */
-type RallyTab = 'attack' | 'serve' | null
+/** ラリー中に開いている入力：自チームのアタック・相手のスパイク（F-25）・直前の1本への付け足し。null は閉じている */
+type RallyTab = 'attack' | 'dig' | 'serve' | null
 
 const hasRecords = (r: SetRecords | undefined): boolean =>
-  !!r && r.serves.length + r.receptions.length + r.attacks.length + r.points.length > 0
+  !!r &&
+  r.serves.length + r.receptions.length + r.attacks.length + (r.oppAttacks?.length ?? 0) + r.points.length > 0
 
 /** その1本を入力した欄（サーブ＝自チームのサーブ、レシーブ＝相手のサーブ） */
 const panelOf = (rec: PlayRecord): Side | null =>
@@ -116,7 +118,7 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
   const recentMarks = recentServeMarks(records?.serves ?? [], ctx.players, colors)
   const points = records?.points ?? []
   const plays: PlayRecord[] = records
-    ? [...records.serves, ...records.receptions, ...records.attacks]
+    ? [...records.serves, ...records.receptions, ...records.attacks, ...(records.oppAttacks ?? [])]
     : []
   const state = rallyStateOf(points, override?.setId === set.id ? override : null)
   const winners = setWinnersOf(
@@ -126,22 +128,30 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
   )
   const winner = winners[setIndex] ?? null
   const matchOver = matchWinner(winners, bestOf) !== null
-  const lastPlay = records ? latestOf<PlayRecord>(records.serves, records.receptions, records.attacks) : null
+  const lastPlay = records
+    ? latestOf<PlayRecord>(records.serves, records.receptions, records.attacks, records.oppAttacks ?? [])
+    : null
   const shown = view ?? state.serving
   const rally = inRally(lastPlay, points)
-  /** 相手が打ってくる番か。自チームのサーブのあとはアタック欄を閉じておく（部活フィードバック） */
+  /**
+   * 相手が打ってくる番か。自チームのサーブのあとはアタック欄を閉じておき（部活フィードバック）、
+   * 代わりに相手のスパイクの欄（F-25）を開く。拾ったら（A〜D）自チームの番になりアタック欄が開く
+   */
   const turn = rallyTurnOf(lastPlay)
   const rallyTab: RallyTab =
     lastPlay && rallyChoice?.after === lastPlay.clientId
       ? rallyChoice.tab
       : turn === 'us'
         ? 'attack'
-        : null
+        : 'dig'
   /** 押したタブを開く。開いているタブを押し直したら閉じる */
   const openRallyTab = (tab: Exclude<RallyTab, null>) => {
     if (lastPlay) setRallyChoice({ after: lastPlay.clientId, tab: tab === rallyTab ? null : tab })
   }
   const showAttack = rally && rallyTab === 'attack' && !showList
+  const showDig = rally && rallyTab === 'dig' && !showList
+  /** ラリー中の欄（アタック・相手のスパイク）を出しているあいだは、サーブ・レシーブの欄を隠す */
+  const showRallyInput = showAttack || showDig
 
   const savePlay = (rec: PlayRecord) => {
     setSaveError(null)
@@ -327,7 +337,7 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
             <p className={turn === 'us' ? 'rally-hint' : 'rally-hint is-opp'}>
               {turn === 'us'
                 ? 'ラリー中（自チームの攻撃）：アタックを記録するか、得点したチームの数字をタップ'
-                : 'ラリー中（相手の攻撃）：相手のスパイクを拾って打ち返したら「自チームのアタック」。決まったら得点したチームの数字をタップ'}
+                : 'ラリー中（相手の攻撃）：相手のスパイクを記録するか、得点したチームの数字をタップ'}
             </p>
             <div className="row seg" role="group" aria-label="ラリー中の入力">
               <button
@@ -337,6 +347,14 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
                 onClick={() => openRallyTab('attack')}
               >
                 自チームのアタック
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                aria-pressed={rallyTab === 'dig'}
+                onClick={() => openRallyTab('dig')}
+              >
+                相手のスパイク
               </button>
               <button
                 type="button"
@@ -351,7 +369,7 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
         )}
 
         {!showList &&
-          !showAttack &&
+          !showRallyInput &&
           (view !== null ? (
             <div className="row">
               <button type="button" className="btn btn-sm" onClick={() => setView(null)}>
@@ -395,7 +413,19 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
             />
           </div>
         )}
-        <div hidden={showList || showAttack || shown !== 'us'}>
+        {rally && (
+          <div hidden={!showDig}>
+            <DigPanel
+              key={set.id}
+              setId={set.id}
+              players={activePlayers}
+              oppPlayers={oppPlayers}
+              onSave={savePlay}
+              onAddOpp={onAddOpp}
+            />
+          </div>
+        )}
+        <div hidden={showList || showRallyInput || shown !== 'us'}>
           <ServePanel
             key={set.id}
             setId={set.id}
@@ -407,7 +437,7 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
             recentMarks={recentMarks}
           />
         </div>
-        <div hidden={showList || showAttack || shown !== 'opp'}>
+        <div hidden={showList || showRallyInput || shown !== 'opp'}>
           <ReceptionPanel
             key={set.id}
             setId={set.id}

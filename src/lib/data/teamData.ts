@@ -17,6 +17,7 @@ import {
   checkMatch,
   checkOpponentPlayerNumber,
   checkPlayer,
+  duplicateNumberMessage,
   matchFromRow,
   matchToRow,
   nextSetNo,
@@ -233,16 +234,27 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
       )
       const existing = found[0]
       if (existing) return opponentPlayerFromRow(existing)
-      // 背番号が B チームの別の選手と重なると、一意制約（opponent_id, number）で reject される
-      return opponentPlayerFromRow(
-        check(
+      const inserted = await db()
+        .from('opponent_players')
+        .insert({ opponent_id: opponentId, number, player_id: playerId })
+        .select(COLUMNS.opponent_players)
+        .single<OpponentPlayerRow>()
+      if (inserted.error?.code === '23505') {
+        // 一意制約に当たった。ほかの端末が同じ部員を同時に足したのなら、その行を返す。
+        // そうでなければ、背番号が B チームの別の選手と重なっている
+        const again = check(
           await db()
             .from('opponent_players')
-            .insert({ opponent_id: opponentId, number, player_id: playerId })
             .select(COLUMNS.opponent_players)
-            .single<OpponentPlayerRow>(),
-        ),
-      )
+            .eq('opponent_id', opponentId)
+            .eq('player_id', playerId)
+            .returns<OpponentPlayerRow[]>(),
+        )
+        const raced = again[0]
+        if (raced) return opponentPlayerFromRow(raced)
+        throw new Error(duplicateNumberMessage(number))
+      }
+      return opponentPlayerFromRow(check(inserted))
     },
     async listMatches(teamId) {
       return check(

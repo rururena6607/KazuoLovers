@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { AttackRecord, ReceptionRecord, ServeRecord } from '../../contracts/index.ts'
+import type { AttackRecord, OppAttackRecord, ReceptionRecord, ServeRecord } from '../../contracts/index.ts'
 import {
   buildAttack,
   emptyAttackDraft,
   prevReceptionOf,
   rallyTurnOf,
+  withArrowTap,
   withAttackType,
   type AttackDraft,
 } from './attack.ts'
@@ -69,7 +70,12 @@ describe('prevReceptionOf', () => {
 })
 
 describe('buildAttack', () => {
-  const draft: AttackDraft = { attackerId: 'p7', attackType: 'left', isBack: false, to: { x: 0.3, y: 0.6 } }
+  const draft: AttackDraft = {
+    ...emptyAttackDraft(),
+    attackerId: 'p7',
+    attackType: 'left',
+    to: { x: 0.3, y: 0.6 },
+  }
 
   it('打った選手がいなければ作らない', () => {
     expect(buildAttack(emptyAttackDraft(), 'kill', null, ids)).toBeNull()
@@ -85,6 +91,17 @@ describe('buildAttack', () => {
       prevReception: 'A',
     })
   })
+  it('矢印（打った位置・方向）と速さを残す。入れなければ null（F-20・F-26）', () => {
+    const arrow = { ...draft, from: { x: 0.8, y: 0.2 }, speed: 'fast' as const }
+    expect(buildAttack(arrow, 'kill', null, ids)).toMatchObject({
+      fromX: 0.8,
+      fromY: 0.2,
+      toX: 0.3,
+      toY: 0.6,
+      speed: 'fast',
+    })
+    expect(buildAttack(draft, 'kill', null, ids)).toMatchObject({ fromX: null, fromY: null, speed: null })
+  })
   it('バックアタックかどうかは下書きの isBack だけで決める', () => {
     expect(buildAttack({ ...draft, isBack: true }, 'error', null, ids)?.isBack).toBe(true)
     expect(buildAttack(draft, 'error', null, ids)?.isBack).toBe(false)
@@ -92,7 +109,7 @@ describe('buildAttack', () => {
 })
 
 describe('withAttackType', () => {
-  const draft: AttackDraft = { attackerId: 'p7', attackType: null, isBack: false, to: null }
+  const draft: AttackDraft = { ...emptyAttackDraft(), attackerId: 'p7' }
 
   it('種類「バック」を選ぶとバックアタックにする', () => {
     expect(withAttackType(draft, 'back')).toMatchObject({ attackType: 'back', isBack: true })
@@ -130,5 +147,55 @@ describe('rallyTurnOf（T-36 部活フィードバック）', () => {
     }
     expect(rallyTurnOf(cont)).toBe('opp')
     expect(rallyTurnOf(null)).toBe('opp')
+  })
+  it('相手のスパイクを拾ったあと（A〜D）は自チームが打つ番（F-25）', () => {
+    const dug: OppAttackRecord = {
+      kind: 'opp_attack',
+      clientId: 'd0',
+      setId: 's1',
+      hitterId: null,
+      diggerId: 'p7',
+      fromX: null,
+      fromY: null,
+      toX: null,
+      toY: null,
+      speed: null,
+      result: 'B',
+      recordedAt: t(3),
+    }
+    expect(rallyTurnOf(dug)).toBe('us')
+    expect(prevReceptionOf(dug)).toBeNull()
+  })
+})
+
+describe('withArrowTap（両面のコート図のタップ）', () => {
+  const draft = emptyAttackDraft()
+
+  it('自コートは打った位置、相手コートは打った方向（F-20）', () => {
+    const a = withArrowTap(draft, 'own', { x: 0.7, y: 0.3 })
+    expect(a).toMatchObject({ from: { x: 0.7, y: 0.3 }, to: null })
+    const b = withArrowTap(a, 'opponent', { x: 0.2, y: 0.8 })
+    expect(b).toMatchObject({ from: { x: 0.7, y: 0.3 }, to: { x: 0.2, y: 0.8 } })
+  })
+  it('どちらから押してもよく、押し直したら置き換える', () => {
+    const a = withArrowTap(draft, 'opponent', { x: 0.2, y: 0.8 })
+    const b = withArrowTap(a, 'opponent', { x: 0.5, y: 0.5 })
+    expect(b).toMatchObject({ from: null, to: { x: 0.5, y: 0.5 } })
+  })
+})
+
+describe('withArrowTap（両面のコート図のタップ）', () => {
+  const draft = emptyAttackDraft()
+
+  it('自コートは打った位置、相手コートは打った方向（F-20）', () => {
+    const a = withArrowTap(draft, 'own', { x: 0.7, y: 0.3 })
+    expect(a).toMatchObject({ from: { x: 0.7, y: 0.3 }, to: null })
+    const b = withArrowTap(a, 'opponent', { x: 0.2, y: 0.8 })
+    expect(b).toMatchObject({ from: { x: 0.7, y: 0.3 }, to: { x: 0.2, y: 0.8 } })
+  })
+  it('どちらから押してもよく、押し直したら置き換える', () => {
+    const a = withArrowTap(draft, 'opponent', { x: 0.2, y: 0.8 })
+    const b = withArrowTap(a, 'opponent', { x: 0.5, y: 0.5 })
+    expect(b).toMatchObject({ from: null, to: { x: 0.5, y: 0.5 } })
   })
 })

@@ -19,7 +19,7 @@ export interface MatchRepository {
   loadMatch(matchId: string): Promise<MatchContext>
   /**
    * 試合中にその場で相手の背番号を足す（F-04）。同じ背番号がすでにあれば、それを返す。
-   * 紅白戦の B チームには、playerId に自チームの選手（部員）を渡す（F-27）：number は B チームでの背番号（ふつうはその部員の背番号）。
+   * 紅白戦の B チーム**だけ**に、playerId に自チームの選手（部員）を渡す（F-27。ふつうの試合の相手チームには渡さない。DB は同じチームの選手かどうかしか確かめない）：number は B チームでの背番号（ふつうはその部員の背番号）。
    * その部員がすでに入っていれば、それを返す。number が B チームの別の選手と重なるときは reject する
    */
   addOpponentPlayer(opponentId: string, number: number, playerId?: string): Promise<OpponentPlayer>

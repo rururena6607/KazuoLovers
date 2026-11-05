@@ -8,6 +8,7 @@ const draft: ServeDraft = {
   fromX: 0.8,
   to: { x: 0.2, y: 0.9 },
   receiverId: 'o12',
+  speed: 'slow',
 }
 
 describe('buildServe', () => {
@@ -18,6 +19,11 @@ describe('buildServe', () => {
   it('A〜D はインとして、評価と受けた相手を残す', () => {
     const rec = buildServe(draft, { result: 'in', grade: 'C' }, ids)
     expect(rec).toMatchObject({ result: 'in', reception: 'C', receiverId: 'o12', toX: 0.2, toY: 0.9 })
+  })
+
+  it('速さを残す。入れなければ null（F-26）', () => {
+    expect(buildServe(draft, { result: 'ace' }, ids)?.speed).toBe('slow')
+    expect(buildServe({ ...draft, speed: null }, { result: 'ace' }, ids)?.speed).toBeNull()
   })
 
   it('エースは評価も受けた相手もなし', () => {
@@ -65,7 +71,7 @@ describe('fitsOutcome', () => {
 })
 
 describe('nextDraft', () => {
-  it('サーバー・種類・打つ位置を残し、着弾点と受けた相手を空にする', () => {
-    expect(nextDraft(draft)).toEqual({ ...draft, to: null, receiverId: null })
+  it('サーバー・種類・打つ位置を残し、着弾点・受けた相手・速さを空にする', () => {
+    expect(nextDraft(draft)).toEqual({ ...draft, to: null, receiverId: null, speed: null })
   })
 })

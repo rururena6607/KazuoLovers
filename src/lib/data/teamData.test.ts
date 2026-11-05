@@ -1,8 +1,9 @@
-// teamData の updateColSplits・addScrimmagePlayer（MatchRepository、T-48）。
+// teamData の updateColSplits と、addOpponentPlayer の playerId（MatchRepository、T-48）。
 // 本物の Supabase の代わりに、メモリ上の表を使う最小限の偽のクライアントで、送る内容と結果を確かめる。
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 import { createSupabaseTeamData } from './teamData.ts'
+import { duplicateNumberMessage } from './teamRows.ts'
 
 type Row = Record<string, unknown>
 type Err = { message: string; code?: string }
@@ -19,8 +20,20 @@ interface Call {
  * teamData が使う呼び方（from → select / insert / update → eq → single か、そのまま待つ）だけを持つ偽のクライアント。
  * (opponent_id, number) の一意制約も真似る
  */
-function fakeClient(tables: Record<string, Row[]>, failInsert: readonly string[] = []) {
+interface FakeOptions {
+  /** この表への insert を失敗させる */
+  failInsert?: readonly string[]
+  /** この表からの delete を失敗させる */
+  failDelete?: readonly string[]
+  /** opponent_players の最初の select だけ空を返す（ほかの端末が、そのあとに足した場面を真似る） */
+  hideFirstOpponentPlayerSelect?: boolean
+}
+
+function fakeClient(tables: Record<string, Row[]>, options: FakeOptions = {}) {
+  const failInsert = options.failInsert ?? []
+  const failDelete = options.failDelete ?? []
   const calls: Call[] = []
+  let hidden = options.hideFirstOpponentPlayerSelect ?? false
   const client = {
     from(table: string) {
       const call: Call = { table, op: 'select', filters: [] }
@@ -33,6 +46,9 @@ function fakeClient(tables: Record<string, Row[]>, failInsert: readonly string[]
           const same = tables[table]?.find((r) => cols.every((c) => r[c] === call.payload?.[c]))
           if (same) return { data: [same], error: null }
           call.op = 'insert'
+        }
+        if (call.op === 'delete' && failDelete.includes(table)) {
+          return { data: null, error: { message: 'delete failed', code: '42501' } }
         }
         if (call.op === 'delete') {
           const rows = matching()
@@ -59,6 +75,10 @@ function fakeClient(tables: Record<string, Row[]>, failInsert: readonly string[]
           const inserted = { id: `new-${tables[table]?.length ?? 0}`, ...row }
           tables[table]?.push(inserted)
           return { data: [inserted], error: null }
+        }
+        if (call.op === 'select' && table === 'opponent_players' && hidden) {
+          hidden = false
+          return { data: [], error: null }
         }
         const rows = matching()
         if (call.op === 'update') for (const r of rows) Object.assign(r, call.payload)
@@ -115,7 +135,10 @@ describe('updateColSplits（F-24）', () => {
 
   it('ないセット（または権限のないセット）は、保存したことにしない', async () => {
     const { client } = fakeClient({ sets: [set('s1')] })
-    await expect(createSupabaseTeamData(() => client).updateColSplits('nothing', 0.3, 0.7)).rejects.toThrow()
+    // 画面に出す文は日本語（PostgREST の英語のエラーをそのまま出さない）
+    await expect(createSupabaseTeamData(() => client).updateColSplits('nothing', 0.3, 0.7)).rejects.toThrow(
+      'データが見つかりませんでした',
+    )
   })
 })
 
@@ -153,7 +176,17 @@ describe('addOpponentPlayer（F-04・F-27）', () => {
   it('紅白戦：B チームの別の選手と背番号が重なるときは、足せない（一意制約）。黙ってその選手を返さない', async () => {
     const other = { id: 'op2', opponent_id: 'o-b', number: 8, player_id: 'p-other' }
     const { client } = fakeClient({ players: players(), opponent_players: [other] })
-    await expect(createSupabaseTeamData(() => client).addOpponentPlayer('o-b', 8, 'p8')).rejects.toThrow('重なっています')
+    await expect(createSupabaseTeamData(() => client).addOpponentPlayer('o-b', 8, 'p8')).rejects.toThrow(
+      duplicateNumberMessage(8),
+    )
+  })
+
+  it('同じ部員を 2 台が同時に足したときは、エラーにせず、先に入った行を返す', async () => {
+    // 最初の確認では空だったが、足そうとしたときには、ほかの端末がもう足していた
+    const raced = { id: 'op1', opponent_id: 'o-b', number: 8, player_id: 'p8' }
+    const { client } = fakeClient({ players: players(), opponent_players: [raced] }, { hideFirstOpponentPlayerSelect: true })
+    const result = await createSupabaseTeamData(() => client).addOpponentPlayer('o-b', 8, 'p8')
+    expect(result).toMatchObject({ id: 'op1', playerId: 'p8' })
   })
 
   it('背番号が 0〜99 でなければ、送らずに断る', async () => {
@@ -199,7 +232,7 @@ describe('紅白戦の作成（F-27）', () => {
 
   it('試合を作れなかったら、さっき作った B チームを残さない', async () => {
     const tables: Record<string, Row[]> = { opponents: [], matches: [], sets: [] }
-    const { client } = fakeClient(tables, ['matches'])
+    const { client } = fakeClient(tables, { failInsert: ['matches'] })
     await expect(
       createSupabaseTeamData(() => client).createMatch('t1', { ...matchInput, kind: 'scrimmage', opponentId: null }),
     ).rejects.toThrow()

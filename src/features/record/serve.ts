@@ -1,5 +1,5 @@
 // 自チームのサーブ1本を作る（要件定義書 F-06・F-07、6 章「1本の確定」）。画面から切り離してテストする。
-import type { Grade, MissType, ServeRecord, ServeType } from '../../contracts/index.ts'
+import type { Grade, MissType, ServeRecord, ServeType, Speed } from '../../contracts/index.ts'
 import { zoneOf } from '../../lib/court/index.ts'
 
 /** 結果ボタンを押す前の入力 */
@@ -9,6 +9,8 @@ export interface ServeDraft {
   fromX: number | null
   to: { x: number; y: number } | null
   receiverId: string | null
+  /** サーブの速さ（F-26）。任意 */
+  speed: Speed | null
 }
 
 /** 結果ボタン：エース、A〜D（イン）、ミス（種類つき） */
@@ -23,6 +25,7 @@ export const emptyDraft = (serveType: ServeType = 'float'): ServeDraft => ({
   fromX: null,
   to: null,
   receiverId: null,
+  speed: null,
 })
 
 /** 確定した1本。サーバーが選ばれていない・着弾点と結果が食い違うときは null */
@@ -49,12 +52,21 @@ export function buildServe(
     // 受けた相手はインのときだけ
     receiverId: outcome.result === 'in' ? draft.receiverId : null,
     targetZone: null,
+    speed: draft.speed,
     recordedAt: ids.recordedAt,
   }
 }
 
-/** 確定後の入力：サーバーと打つ位置と種類を残し、着弾点と受けた相手を空に戻す */
-export const nextDraft = (draft: ServeDraft): ServeDraft => ({ ...draft, to: null, receiverId: null })
+/**
+ * 確定後の入力：サーバーと打つ位置と種類を残し、着弾点と受けた相手を空に戻す。
+ * 速さも1本ごとに違うので空に戻す（6 章「入力の残し方」で残すのはサーバーと打つ位置）
+ */
+export const nextDraft = (draft: ServeDraft): ServeDraft => ({
+  ...draft,
+  to: null,
+  receiverId: null,
+  speed: null,
+})
 
 /** 着弾点がコートの中か（境目の線上は中） */
 export const inCourt = (p: { x: number; y: number }): boolean => zoneOf('opponent', p.x, p.y) !== null

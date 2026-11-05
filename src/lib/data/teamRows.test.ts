@@ -6,6 +6,7 @@ import {
   checkMatch,
   checkOpponentPlayerNumber,
   checkPlayer,
+  duplicateNumberMessage,
   matchFromRow,
   matchToRow,
   nextSetNo,
@@ -223,5 +224,15 @@ describe('toDataErrorMessage', () => {
       '通信できませんでした。電波のよい場所でもう一度試してください。',
     )
     expect(toDataErrorMessage({ message: 'boom' })).toBe('保存できませんでした（boom）')
+  })
+
+  it('1 件のはずが 0 件（PGRST116）は、英語のまま出さず、日本語にする', () => {
+    expect(toDataErrorMessage({ message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116' })).toBe(
+      'データが見つかりませんでした（ないか、このチームのデータではありません）。',
+    )
+  })
+
+  it('紅白戦の B チームの背番号の重複は、背番号を入れた文にする', () => {
+    expect(duplicateNumberMessage(8)).toBe('紅白戦の B チームに、背番号 8 の選手がすでにいます。ほかの背番号で入れてください。')
   })
 })

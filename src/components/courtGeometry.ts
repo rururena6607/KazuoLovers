@@ -52,3 +52,26 @@ export const zoneLabel = (zone: number): string => '①②③④⑤⑥⑦⑧⑨'
 /** そのコートのゾーン番号すべて（小さい順）。並びの正は config.ts の ZONES */
 export const allZones = (side: CourtSide): number[] =>
   [...ZONES[side].front, ...ZONES[side].back].sort((a, b) => a - b)
+
+// 両面のコート図（FullCourt）：上に相手コート、下に自コート、真ん中にネット。
+// 片面の図をそのまま重ね、自コートは COURT_H だけ下にずらす（ネットの線が重なる）。
+// 矢印（F-20 アタック・F-25 相手のスパイク）のように、ネットをまたぐ線を描くのに使う。
+
+/** 両面の図の viewBox の高さ */
+export const FULL_VIEW_H = VIEW_H + COURT_H
+/** 自コートを描くときに下へずらす量 */
+export const OWN_OFFSET_Y = COURT_H
+/** 両面の図でのネットの高さ */
+export const FULL_NET_Y = MARGIN_Y + COURT_H
+
+/** 両面の図の上の点 → どちらのコートのどの座標か。ネットの線より上は相手コート */
+export function fullToCourt(s: CourtPoint): { side: CourtSide; p: CourtPoint } {
+  if (s.y < FULL_NET_Y) return { side: 'opponent', p: svgToCourt('opponent', s) }
+  return { side: 'own', p: svgToCourt('own', { x: s.x, y: s.y - OWN_OFFSET_Y }) }
+}
+
+/** コートの座標 → 両面の図の上の点。fullToCourt の逆 */
+export function courtToFull(side: CourtSide, p: CourtPoint): CourtPoint {
+  const s = courtToSvg(side, p)
+  return side === 'own' ? { x: s.x, y: s.y + OWN_OFFSET_Y } : s
+}
