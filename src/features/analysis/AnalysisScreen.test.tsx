@@ -157,3 +157,33 @@ describe('AnalysisScreen の AI コメント（T-32）', () => {
     expect(html).not.toContain('AIに分析してもらう')
   })
 })
+
+describe('AnalysisScreen（レシーブ：相手のスパイク）', () => {
+  const withDig: AnalysisData = {
+    ...data,
+    records: [
+      {
+        ...data.records[0]!,
+        oppAttacks: [
+          {
+            kind: 'opp_attack',
+            clientId: 'd1',
+            setId: 's1',
+            hitterId: null,
+            diggerId: null,
+            fromX: 0.1,
+            fromY: 0.1,
+            toX: 0.1,
+            toY: 0.9,
+            speed: null,
+            result: 'A',
+            recordedAt: '2026-10-20T00:00:02Z',
+          },
+        ],
+      },
+    ],
+  }
+  it('サーブのタブには出さない（初期表示）', () => {
+    expect(renderToString(<AnalysisScreen data={withDig} />)).not.toContain('拾えた率')
+  })
+})

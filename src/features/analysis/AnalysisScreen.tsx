@@ -9,8 +9,10 @@ import { MetricRow, StatTable } from './StatTable.tsx'
 import { emptySet, scoreTrend, setResults } from './setResults.ts'
 import {
   COURSE_NOTES,
+  DIG_NOTE,
   TAB_LABELS,
   courseHeatmap,
+  digView,
   heatmap,
   overallMetrics,
   playerTable,
@@ -117,6 +119,7 @@ export function AnalysisScreen({
             metrics: overallMetrics(tab, sets),
             heat: tab === 'attack' ? null : heatmap(tab, sets),
             course: tab === 'attack' ? null : courseHeatmap(tab, sets),
+            dig: tab === 'reception' ? digView(sets) : null,
             types: tab === 'serve' ? serveTypeTable(sets) : null,
             players: playerTable(tab, sets, data.players),
           },
@@ -197,6 +200,15 @@ export function AnalysisScreen({
               <Heatmap map={overview.course} />
               <p className="an-note">{tab === 'serve' ? COURSE_NOTES.serve : COURSE_NOTES.reception}</p>
             </>
+          )}
+          {overview.dig && (
+            <section className="an-section" aria-label="相手のスパイク">
+              <h3>相手のスパイク</h3>
+              <MetricRow metrics={overview.dig.metrics} />
+              <Heatmap map={overview.dig.landing} />
+              <Heatmap map={overview.dig.origin} />
+              <p className="an-note">{DIG_NOTE}</p>
+            </section>
           )}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
           <StatTable title="選手別" nameHeader="選手" table={overview.players} />
