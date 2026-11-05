@@ -7,10 +7,18 @@ import { auth, type Auth } from '../lib/data/auth.ts'
 import { createFakeRecordRepository } from '../lib/data/fakeRecordRepository.ts'
 import { recordRepository } from '../lib/data/supabaseRecordStore.ts'
 import { teamData, type TeamData } from '../lib/data/teamData.ts'
+import { loadDemoTeam, loadTeamFrom, type LoadTeam } from './analysisData.ts'
 
 export type Backend =
-  | { kind: 'demo'; repo: RecordRepository; source: MatchSource }
-  | { kind: 'supabase'; repo: RecordRepository; source: MatchSource; teamData: TeamData; auth: Auth }
+  | { kind: 'demo'; repo: RecordRepository; source: MatchSource; loadTeam: LoadTeam }
+  | {
+      kind: 'supabase'
+      repo: RecordRepository
+      source: MatchSource
+      loadTeam: LoadTeam
+      teamData: TeamData
+      auth: Auth
+    }
 
 const filled = (v: unknown): boolean => typeof v === 'string' && v !== ''
 
@@ -26,9 +34,17 @@ export function createDemoBackend(): Backend {
       [DEMO_PRACTICE.id]: [DEMO_PRACTICE_SET.id],
     }),
     source: createDemoMatchSource(),
+    loadTeam: loadDemoTeam,
   }
 }
 
 export const backend: Backend = hasSupabaseKeys(import.meta.env)
-  ? { kind: 'supabase', repo: recordRepository, source: teamData, teamData, auth }
+  ? {
+      kind: 'supabase',
+      repo: recordRepository,
+      source: teamData,
+      loadTeam: loadTeamFrom(teamData),
+      teamData,
+      auth,
+    }
   : createDemoBackend()

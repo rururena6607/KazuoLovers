@@ -405,3 +405,105 @@ button {
 .placeholder p {
   color: var(--mute);
 }
+
+/* 記録画面の2つの列。スマホでは縦に並べ、iPad の横向きでは左右に分ける */
+.record-side,
+.record-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* デモで動いているときのお知らせ（保存されないことを見せる） */
+.demo-note {
+  margin: 0;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+  color: var(--mute);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 相手の背番号をその場で足す入力 */
+.add-opp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.add-opp input {
+  width: 4em;
+  min-height: 34px;
+  padding: 0 8px;
+  border: var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px; /* 16px 未満だと iPhone が入力のたびに拡大する */
+}
+
+/* iPad など（縦向きを含む）：幅を広げ、ボタンを大きくする。コート図は大きくなりすぎないようにする */
+@media (min-width: 700px) {
+  .app-main {
+    max-width: 760px;
+  }
+  .btn {
+    min-height: 48px;
+    font-size: 16px;
+  }
+  .btn-sm {
+    min-height: 40px;
+    font-size: 15px;
+  }
+  .chip,
+  .chips-sm .chip {
+    min-width: 48px;
+    min-height: 44px;
+  }
+  .results > .btn {
+    min-height: 56px;
+    font-size: 20px;
+  }
+  .record-head,
+  .chips-label {
+    font-size: 15px;
+  }
+  .score-num {
+    font-size: 56px;
+  }
+  .court,
+  .endline {
+    max-width: 560px;
+    margin: 0 auto;
+  }
+}
+
+/* iPad の横向き・PC：左に得点とサーブ権、右に入力欄。どちらも画面の高さに収める */
+@media (min-width: 960px) and (orientation: landscape) {
+  .app-main {
+    max-width: 1180px;
+  }
+  .record {
+    display: grid;
+    grid-template-columns: minmax(300px, 2fr) 3fr;
+    align-items: start;
+    column-gap: 16px;
+  }
+  .record-side {
+    position: sticky;
+    top: 6px;
+  }
+  .record > .record-foot {
+    grid-column: 1 / -1;
+  }
+  .court,
+  .endline {
+    max-width: none;
+  }
+  /* 縦の高さが足りなくならないよう、コート図は画面の高さに合わせる */
+  .record-input .court {
+    max-height: 48dvh;
+  }
+}

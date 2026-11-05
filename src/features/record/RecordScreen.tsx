@@ -231,182 +231,188 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
 
   return (
     <section className="record" aria-label={`${match.date} ${oppName}`}>
-      <header className="record-head">
-        <span>
-          vs {oppName}・第{set.setNo}セット
-        </span>
-        <button
-          type="button"
-          className="btn btn-sm"
-          aria-label={`${bestOf}セットマッチ（押すと${bestOf === 3 ? 5 : 3}セットマッチに変える）`}
-          onClick={() => changeBestOf(bestOf === 3 ? 5 : 3)}
-        >
-          {bestOf}セットマッチ
-        </button>
-        {pending > 0 && (
-          <span className="pending">
-            未送信 {pending}件
-            <button type="button" className="btn btn-sm" onClick={() => void repo.retry()}>
-              再送
-            </button>
-          </span>
-        )}
-        {onPractice && (
-          <button type="button" className="btn btn-sm" onClick={onPractice}>
-            練習モード
-          </button>
-        )}
-      </header>
-      {saveError && (
-        <p className="error" role="alert">
-          {saveError}
-        </p>
-      )}
-
-      <div className="scoreboard">
-        <ScoreButton
-          label="自チーム"
-          score={state.ourScore}
-          serving={state.serving === 'us'}
-          onPlus={() => plus('us')}
-          onMinus={() => minus('us')}
-        />
-        <span className="score-sep">-</span>
-        <ScoreButton
-          label={oppName}
-          score={state.oppScore}
-          serving={state.serving === 'opp'}
-          onPlus={() => plus('opp')}
-          onMinus={() => minus('opp')}
-        />
-      </div>
-
-      {winner && (
-        <div className="banner set-over">
+      {/* 得点・サーブ権・ラリー中の案内。iPad の横向きでは左の列に出す */}
+      <div className="record-side">
+        <header className="record-head">
           <span>
-            セット終了 {state.ourScore}-{state.oppScore}（{winner === 'us' ? '勝ち' : '負け'}）
-            {matchOver && '・試合終了'}
+            vs {oppName}・第{set.setNo}セット
           </span>
-          {!matchOver && setIndex < bestOf - 1 && (
-            <button type="button" className="btn" disabled={creatingSet} onClick={nextSet}>
-              次のセットへ
+          <button
+            type="button"
+            className="btn btn-sm"
+            aria-label={`${bestOf}セットマッチ（押すと${bestOf === 3 ? 5 : 3}セットマッチに変える）`}
+            onClick={() => changeBestOf(bestOf === 3 ? 5 : 3)}
+          >
+            {bestOf}セットマッチ
+          </button>
+          {pending > 0 && (
+            <span className="pending">
+              未送信 {pending}件
+              <button type="button" className="btn btn-sm" onClick={() => void repo.retry()}>
+                再送
+              </button>
+            </span>
+          )}
+          {onPractice && (
+            <button type="button" className="btn btn-sm" onClick={onPractice}>
+              練習モード
             </button>
           )}
-        </div>
-      )}
-
-      <div className="row seg" role="group" aria-label="サーブ権">
-        <button
-          type="button"
-          className="btn"
-          aria-pressed={state.serving === 'us'}
-          onClick={() => switchServing('us')}
-        >
-          自チームのサーブ
-        </button>
-        <button
-          type="button"
-          className="btn"
-          aria-pressed={state.serving === 'opp'}
-          onClick={() => switchServing('opp')}
-        >
-          相手のサーブ
-        </button>
-      </div>
-
-      {rally && !showList && (
-        <>
-          <p className={turn === 'us' ? 'rally-hint' : 'rally-hint is-opp'}>
-            {turn === 'us'
-              ? 'ラリー中（自チームの攻撃）：アタックを記録するか、得点したチームの数字をタップ'
-              : 'ラリー中（相手の攻撃）：相手のスパイクを拾って打ち返したら「自チームのアタック」。決まったら得点したチームの数字をタップ'}
+        </header>
+        {saveError && (
+          <p className="error" role="alert">
+            {saveError}
           </p>
-          <div className="row seg" role="group" aria-label="ラリー中の入力">
-            <button
-              type="button"
-              className="btn btn-sm"
-              aria-pressed={rallyTab === 'attack'}
-              onClick={() => openRallyTab('attack')}
-            >
-              自チームのアタック
-            </button>
-            <button
-              type="button"
-              className="btn btn-sm"
-              aria-pressed={rallyTab === 'serve'}
-              onClick={() => openRallyTab('serve')}
-            >
-              {shown === 'us' ? 'サーブ' : 'レシーブ'}（付け足し）
-            </button>
-          </div>
-        </>
-      )}
+        )}
 
-      {!showList &&
-        !showAttack &&
-        (view !== null ? (
-          <div className="row">
-            <button type="button" className="btn btn-sm" onClick={() => setView(null)}>
-              次の1本の入力に戻る
-            </button>
+        <div className="scoreboard">
+          <ScoreButton
+            label="自チーム"
+            score={state.ourScore}
+            serving={state.serving === 'us'}
+            onPlus={() => plus('us')}
+            onMinus={() => minus('us')}
+          />
+          <span className="score-sep">-</span>
+          <ScoreButton
+            label={oppName}
+            score={state.oppScore}
+            serving={state.serving === 'opp'}
+            onPlus={() => plus('opp')}
+            onMinus={() => minus('opp')}
+          />
+        </div>
+
+        {winner && (
+          <div className="banner set-over">
+            <span>
+              セット終了 {state.ourScore}-{state.oppScore}（{winner === 'us' ? '勝ち' : '負け'}）
+              {matchOver && '・試合終了'}
+            </span>
+            {!matchOver && setIndex < bestOf - 1 && (
+              <button type="button" className="btn" disabled={creatingSet} onClick={nextSet}>
+                次のセットへ
+              </button>
+            )}
           </div>
-        ) : (
-          attachSide !== null &&
-          attachSide !== shown && (
-            <div className="row">
-              <button type="button" className="btn btn-sm" onClick={() => setView(attachSide)}>
-                直前の1本（{attachSide === 'us' ? 'サーブ' : 'レシーブ'}）に付け足す
+        )}
+
+        <div className="row seg" role="group" aria-label="サーブ権">
+          <button
+            type="button"
+            className="btn"
+            aria-pressed={state.serving === 'us'}
+            onClick={() => switchServing('us')}
+          >
+            自チームのサーブ
+          </button>
+          <button
+            type="button"
+            className="btn"
+            aria-pressed={state.serving === 'opp'}
+            onClick={() => switchServing('opp')}
+          >
+            相手のサーブ
+          </button>
+        </div>
+
+        {rally && !showList && (
+          <>
+            <p className={turn === 'us' ? 'rally-hint' : 'rally-hint is-opp'}>
+              {turn === 'us'
+                ? 'ラリー中（自チームの攻撃）：アタックを記録するか、得点したチームの数字をタップ'
+                : 'ラリー中（相手の攻撃）：相手のスパイクを拾って打ち返したら「自チームのアタック」。決まったら得点したチームの数字をタップ'}
+            </p>
+            <div className="row seg" role="group" aria-label="ラリー中の入力">
+              <button
+                type="button"
+                className="btn btn-sm"
+                aria-pressed={rallyTab === 'attack'}
+                onClick={() => openRallyTab('attack')}
+              >
+                自チームのアタック
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                aria-pressed={rallyTab === 'serve'}
+                onClick={() => openRallyTab('serve')}
+              >
+                {shown === 'us' ? 'サーブ' : 'レシーブ'}（付け足し）
               </button>
             </div>
-          )
-        ))}
+          </>
+        )}
 
-      {showList && (
-        <RecordList
-          entries={entries}
-          players={ctx.players}
-          oppPlayers={oppPlayers}
-          onRemove={removeEntry}
-          onEdit={editEntry}
-          onClose={() => setShowList(false)}
-        />
-      )}
+        {!showList &&
+          !showAttack &&
+          (view !== null ? (
+            <div className="row">
+              <button type="button" className="btn btn-sm" onClick={() => setView(null)}>
+                次の1本の入力に戻る
+              </button>
+            </div>
+          ) : (
+            attachSide !== null &&
+            attachSide !== shown && (
+              <div className="row">
+                <button type="button" className="btn btn-sm" onClick={() => setView(attachSide)}>
+                  直前の1本（{attachSide === 'us' ? 'サーブ' : 'レシーブ'}）に付け足す
+                </button>
+              </div>
+            )
+          ))}
 
-      {/* 入力欄はどれも描いたまま隠し、一覧や付け足しに切り替えても入力途中の内容と直前の1本を残す */}
-      {rally && (
-        <div hidden={!showAttack}>
-          <RallyPanel
+      </div>
+      {/* 入力欄。iPad の横向きでは右の列に出す */}
+      <div className="record-input">
+        {showList && (
+          <RecordList
+            entries={entries}
+            players={ctx.players}
+            oppPlayers={oppPlayers}
+            onRemove={removeEntry}
+            onEdit={editEntry}
+            onClose={() => setShowList(false)}
+          />
+        )}
+
+        {/* 入力欄はどれも描いたまま隠し、一覧や付け足しに切り替えても入力途中の内容と直前の1本を残す */}
+        {rally && (
+          <div hidden={!showAttack}>
+            <RallyPanel
+              key={set.id}
+              setId={set.id}
+              players={activePlayers}
+              prevReception={prevReceptionOf(lastPlay)}
+              onSave={savePlay}
+            />
+          </div>
+        )}
+        <div hidden={showList || showAttack || shown !== 'us'}>
+          <ServePanel
             key={set.id}
             setId={set.id}
             players={activePlayers}
-            prevReception={prevReceptionOf(lastPlay)}
+            oppPlayers={oppPlayers}
             onSave={savePlay}
+            removed={removed}
+            onAddOpp={onAddOpp}
           />
         </div>
-      )}
-      <div hidden={showList || showAttack || shown !== 'us'}>
-        <ServePanel
-          key={set.id}
-          setId={set.id}
-          players={activePlayers}
-          oppPlayers={oppPlayers}
-          onSave={savePlay}
-          removed={removed}
-          onAddOpp={onAddOpp}
-        />
-      </div>
-      <div hidden={showList || showAttack || shown !== 'opp'}>
-        <ReceptionPanel
-          key={set.id}
-          setId={set.id}
-          players={activePlayers}
-          oppPlayers={oppPlayers}
-          onSave={savePlay}
-          removed={removed}
-          onAddOpp={onAddOpp}
-        />
-      </div>
+        <div hidden={showList || showAttack || shown !== 'opp'}>
+          <ReceptionPanel
+            key={set.id}
+            setId={set.id}
+            players={activePlayers}
+            oppPlayers={oppPlayers}
+            onSave={savePlay}
+            removed={removed}
+            onAddOpp={onAddOpp}
+          />
+        </div>
 
+      </div>
       <footer className="record-foot">
         <span className="num last-entry">
           {lastEntry ? describeEntry(lastEntry, ctx.players, oppPlayers) : '—'}

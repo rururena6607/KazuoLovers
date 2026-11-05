@@ -3,21 +3,12 @@ import { AdminScreen } from '../features/admin/AdminScreen.tsx'
 import { AuthGate } from '../features/auth/AuthGate.tsx'
 import { DEMO_MATCH, DEMO_PRACTICE } from '../features/record/demo.ts'
 import RecordTab from '../features/record/RecordTab.tsx'
+import AnalysisTab from './AnalysisTab.tsx'
 import { backend, type Backend } from './backend.ts'
 import InstallGuide from './InstallGuide.tsx'
 import TabBar from './TabBar.tsx'
 import { TABS, type TabId } from './tabs.ts'
 import UpdatePrompt from './UpdatePrompt.tsx'
-
-// 分析（とりはる、T-21）の画面は、できたらここで差し替える。
-function Placeholder({ title, task }: { title: string; task: string }) {
-  return (
-    <section className="placeholder">
-      <h1>{title}</h1>
-      <p>{task} で作ります。</p>
-    </section>
-  )
-}
 
 /** デモ（Supabase のキーがない手元）の管理タブ */
 function DemoAdmin() {
@@ -72,7 +63,14 @@ export function Shell({ b }: { b: Backend }) {
   // タブと画面の対応。TabId を足してここを書き忘れると型エラーになる。
   const screens: Record<TabId, ReactNode> = {
     record,
-    analysis: <Placeholder title="分析" task="T-21" />,
+    analysis: (
+      <AnalysisTab
+        repo={b.repo}
+        loadTeam={b.loadTeam}
+        active={tab === 'analysis'}
+        onChooseMatch={() => select('admin')}
+      />
+    ),
     admin: b.kind === 'demo' ? <DemoAdmin /> : <AdminScreen data={b.teamData} onOpenMatch={openMatch} />,
   }
 

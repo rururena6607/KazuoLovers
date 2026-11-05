@@ -15,7 +15,8 @@ describe('App', () => {
 
   it('選択中以外の画面も描いたまま hidden で隠す', () => {
     const html = renderToString(<App />)
-    expect(html).toMatch(/<div hidden="">(<!-- -->)?<section class="placeholder"><h1>分析<\/h1>/)
+    // 分析のタブは開くまで読まない
+    expect(html).toMatch(/<div hidden="">(<!-- -->)?<section class="placeholder" aria-busy="true"><p>分析のデータ/)
     expect(html).toMatch(/<div hidden="">(<!-- -->)?<section class="placeholder"><h1>管理<\/h1>/)
   })
 
