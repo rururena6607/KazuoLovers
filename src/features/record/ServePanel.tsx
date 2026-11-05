@@ -3,7 +3,7 @@ import Court from '../../components/Court.tsx'
 import type { OpponentPlayer, Player, ServeRecord } from '../../contracts/index.ts'
 import EndlinePicker from './EndlinePicker.tsx'
 import { newIds } from './ids.ts'
-import { GRADES, MISS_TYPES, SERVE_TYPES, playerLabel } from './labels.ts'
+import { GRADES, MISS_TYPES, SERVE_TYPES, playerLabel, toggle } from './labels.ts'
 import {
   buildServe,
   emptyDraft,
@@ -54,12 +54,12 @@ export default function ServePanel({ setId, players, oppPlayers, onSave }: Props
   const selectReceiver = (id: string) => {
     // 結果のあとなら直前の1本に付け足す（6 章「任意項目はあとから付けられる」）
     if (last) {
-      const updated = { ...last, receiverId: last.receiverId === id ? null : id }
+      const updated = { ...last, receiverId: toggle(last.receiverId, id) }
       onSave(updated)
       setLast(updated)
       return
     }
-    update({ receiverId: draft.receiverId === id ? null : id })
+    update({ receiverId: toggle(draft.receiverId, id) })
   }
 
   const receiverId = last ? last.receiverId : draft.receiverId
