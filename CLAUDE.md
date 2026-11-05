@@ -8,7 +8,8 @@
 
 - 編集してよいのは、作業している人が**所有する範囲の中だけ**（実装計画書 3 節）。それ以外のファイルは変更せず、変更が必要なら理由と案を示す。
 - `src/contracts/` の型やインターフェースを変える必要がある場合は、変更せずに理由と案を示す（`contracts` の変更は専用の PR で3人全員が承認する）。
-- 指標の式は要件定義書 5 章（JVA の公式記録票の式）に従い、独自に変えない。
+- 指標の式は要件定義書 5 章（JVA の公式記録票の式）に従い、独自に変えない。JVA の式にない指標（コース割合など）は、5 章に式を書いてから実装し、テストには手計算した数字を使う。
+- ゾーンは座標から計算する。ゾーンの境目は引数で受け取れるようにし、数値を直接書かない。
 - 参考値の本数などの定数は `src/contracts/config.ts` を使い、数値を直接書かない。
 - **TypeScript**（`strict`）で書き、`any` を使わない。
 - `src/lib/` の関数には Vitest のテストを書く。指標のテストには JVA の記録票の数字を使う（実装計画書 8 節）。
@@ -30,7 +31,7 @@
 
 | 範囲 | 所有者 |
 | --- | --- |
-| `src/app/`、`src/components/`、`src/features/record/`、`src/features/practice/`、`public/`、ビルド設定、`.github/` | ガブ |
+| `src/app/`、`src/components/`、`src/features/record/`、`src/features/practice/`、`src/features/board/`、`public/`、ビルド設定、`.github/` | ガブ |
 | `src/contracts/` | ひろし（変更は3人全員の承認） |
 | `src/lib/data/`、`src/features/auth/`、`src/features/admin/`、`supabase/` | ひろし |
 | `src/lib/stats/`、`src/lib/rally/`、`src/lib/court/`、`src/lib/csv/`、`src/features/analysis/` | とりはる |
