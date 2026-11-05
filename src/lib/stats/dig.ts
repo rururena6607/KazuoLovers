@@ -5,7 +5,7 @@
 // 範囲の選択（試合・セット・相手）は、呼ぶ側が記録を絞ってから渡す。
 // ゾーンに分ける関数（lib/court の zoneOf）は、呼ぶ側が引数で渡す（lib/stats は lib/court に依存しない）。
 import type { OppAttackRecord } from '../../contracts/index.ts'
-import type { ZoneOf } from './aggregate.ts'
+import type { SplitsOf, ZoneOf } from './aggregate.ts'
 import { shareOf, type CourseShare } from './course.ts'
 import { percent } from './metrics.ts'
 
@@ -44,10 +44,14 @@ export function digLandingShare(records: readonly OppAttackRecord[], zoneOf: Zon
 }
 
 /** 打ってくる位置の割合（相手コート）。位置を入れなかった記録は分母に入れない */
-export function digOriginShare(records: readonly OppAttackRecord[], zoneOf: ZoneOf): CourseShare {
+export function digOriginShare(
+  records: readonly OppAttackRecord[],
+  zoneOf: ZoneOf,
+  splitsOf?: SplitsOf,
+): CourseShare {
   const withPoint = records.filter((r) => r.fromX !== null && r.fromY !== null)
   return shareOf(
-    withPoint.map((r) => zoneOf('opponent', r.fromX, r.fromY)),
+    withPoint.map((r) => zoneOf('opponent', r.fromX, r.fromY, splitsOf?.(r.setId))),
     withPoint.length,
   )
 }

@@ -33,7 +33,18 @@ import {
 type CourtSide = keyof typeof ZONES
 
 /** 座標からゾーン番号を返す関数（lib/court の zoneOf）。アウトとネットは null */
-export type ZoneOf = (side: CourtSide, x: number | null, y: number | null) => number | null
+export type ZoneOf = (
+  side: CourtSide,
+  x: number | null,
+  y: number | null,
+  colSplits?: readonly [number, number],
+) => number | null
+
+/**
+ * セットの id から、そのセットの相手コートの列の境目（F-24）を返す関数。なければ undefined（3 等分）。
+ * 相手コートのゾーンを使う集計に、省略できる引数として渡す。呼ぶ側は GameSet の colSplit1・colSplit2 から作る
+ */
+export type SplitsOf = (setId: string) => readonly [number, number] | undefined
 
 const SERVE_TYPE_ORDER: readonly ServeType[] = ['float', 'jump_float', 'jump', 'other']
 const ATTACK_TYPE_ORDER: readonly AttackType[] = ['left', 'center', 'right', 'back', 'other']
@@ -110,8 +121,9 @@ export const serveStatsByFromZone = (
 export const serveStatsByLandingZone = (
   serves: readonly ServeRecord[],
   zoneOf: ZoneOf,
+  splitsOf?: SplitsOf,
 ): Map<number, ServeStats> =>
-  fixedKeys(serves, ZONE_NUMBERS, (s) => zoneOf('opponent', s.toX, s.toY), serveStatsOf)
+  fixedKeys(serves, ZONE_NUMBERS, (s) => zoneOf('opponent', s.toX, s.toY, splitsOf?.(s.setId)), serveStatsOf)
 
 /**
  * 相手選手別のサーブレシーブ成功率。自チームのサーブで、受けた相手選手（receiverId）が入っている分だけ。

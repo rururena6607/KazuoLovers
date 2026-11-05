@@ -96,3 +96,24 @@ describe('receptionPositionShare（受けた位置の割合）', () => {
     expect(receptionPositionShare([reception(null, null)], zoneOf).zones.get(6)?.share).toBeNull()
   })
 })
+
+describe('セットごとの列の境目（F-24）：splitsOf を渡すと、相手コートのゾーンをそのセットの境目で数える', () => {
+  // 相手コートの奥の列：左から 1・6・5。x = 0.35 は、3 等分なら中の列（6）、境目 [0.4, 0.8] なら左の列（1）
+  const serves = [
+    { ...serve(0.35, 0.9), setId: 's1' },
+    { ...serve(0.35, 0.9), setId: 's2' },
+  ]
+  const splitsOf = (setId: string) => (setId === 's1' ? ([0.4, 0.8] as const) : undefined)
+
+  it('セット s1 は境目 [0.4, 0.8] で左の列（1）、境目のないセット s2 は 3 等分で中の列（6）', () => {
+    const share = serveLandingShare(serves, zoneOf, splitsOf)
+    expect(share.total).toBe(2)
+    expect(share.zones.get(1)).toEqual({ count: 1, share: 50 })
+    expect(share.zones.get(6)).toEqual({ count: 1, share: 50 })
+  })
+  it('splitsOf を渡さなければ、これまでどおり 3 等分（どちらも中の列）', () => {
+    const share = serveLandingShare(serves, zoneOf)
+    expect(share.zones.get(6)).toEqual({ count: 2, share: 100 })
+    expect(share.zones.get(1)).toEqual({ count: 0, share: 0 })
+  })
+})

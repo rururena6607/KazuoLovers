@@ -24,6 +24,7 @@ import {
   serveStatsByLandingZone,
   serveStatsByType,
   summaryOf,
+  type SplitsOf,
   type ZoneOf,
 } from './aggregate.ts'
 import {
@@ -165,7 +166,7 @@ function byRoster<T, V>(
 /** 試合のサーブか。練習のサーブは狙ったゾーンが入っている（contracts の ServeRecord.targetZone） */
 const isMatchServe = (s: { targetZone: number | null }): boolean => s.targetZone === null
 
-export function buildAiSummary(input: AiSummaryInput, zoneOf: ZoneOf): AiSummary {
+export function buildAiSummary(input: AiSummaryInput, zoneOf: ZoneOf, splitsOf?: SplitsOf): AiSummary {
   const sets = input.sets
     .map((s) => ({ ...s, records: { ...s.records, serves: s.records.serves.filter(isMatchServe) } }))
     .sort((a, b) => a.matchNo - b.matchNo || a.setNo - b.setNo)
@@ -199,7 +200,7 @@ export function buildAiSummary(input: AiSummaryInput, zoneOf: ZoneOf): AiSummary
       byPlayer: serveRows.rows,
       unassigned: serveRows.unassigned,
       byType: [...serveStatsByType(serves)].map(([type, s]) => ({ type, ...aiServe(s) })),
-      byLandingZone: [...serveStatsByLandingZone(serves, zoneOf)]
+      byLandingZone: [...serveStatsByLandingZone(serves, zoneOf, splitsOf)]
         .filter(([, s]) => s.attempts > 0)
         .map(([zone, s]) => ({
           zone,
