@@ -20,6 +20,10 @@ export const withOppPlayer = (list: readonly OpponentPlayer[], p: OpponentPlayer
 export const withSet = (sets: readonly GameSet[], s: GameSet): GameSet[] =>
   sets.some((x) => x.id === s.id) ? [...sets] : [...sets, s].sort((a, b) => a.setNo - b.setNo)
 
+/** 保存し直したセット（列の境目など。F-24）で、同じ id のセットを置き換える */
+export const withSavedSet = (sets: readonly GameSet[], s: GameSet): GameSet[] =>
+  sets.map((x) => (x.id === s.id ? s : x))
+
 /** 相手の背番号として受け付けるか（0〜99 の整数）。受け付けなければ null */
 export const parseOppNumber = (text: string): number | null => {
   const t = text.trim()

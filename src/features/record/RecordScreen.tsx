@@ -48,7 +48,7 @@ interface Props {
   onPractice?: () => void
   /**
    * 相手コートの列の境目を保存する（F-24。GameSet の colSplit1・colSplit2）。
-   * なければ、動かした境目はこの画面のあいだだけ残る（保存の約束は contracts にまだない）
+   * なければ、動かした境目はこの画面のあいだだけ残る
    */
   onSaveColSplits?: (setId: string, splits: ColSplits) => Promise<void>
 }
