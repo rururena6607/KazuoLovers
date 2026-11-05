@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import type { PlayRecord, RecordRepository, SetRecords, Side } from '../../contracts/index.ts'
 import { toggleServing } from '../../lib/rally/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_OPP_PLAYERS, DEMO_PLAYERS, DEMO_SETS } from './demo.ts'
+import { describeEntry, entriesOf, idsToRemove, relinkAttacks, type Entry } from './history.ts'
 import { newIds } from './ids.ts'
 import ReceptionPanel from './ReceptionPanel.tsx'
+import RecordList from './RecordList.tsx'
 import ScoreButton from './ScoreButton.tsx'
 import {
   autoPoint,
@@ -54,6 +56,9 @@ export default function RecordScreen({ repo }: Props) {
   const [view, setView] = useState<Side | null>(null)
   /** この画面で最後に保存した1本 */
   const [lastSaved, setLastSaved] = useState<PlayRecord | null>(null)
+  const [showList, setShowList] = useState(false)
+  /** 取消・削除した clientId。入力欄の「直前の1本」が消えたら付け足しをやめる */
+  const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set())
 
   const recordsOf = (setId: string) => sets.find((s) => s.setId === setId)
   // いまのセットは記録から決める（記録がある最後のセット）。画面を開き直しても第1セットに戻らない
@@ -100,12 +105,38 @@ export default function RecordScreen({ repo }: Props) {
     setView(null)
   }
 
+  /** 記録を消す。消したレシーブの直後のアタックの prevReception も付け直す */
+  const removeIds = (ids: readonly string[]) => {
+    for (const id of ids) remove(id)
+    setRemoved((r) => new Set([...r, ...ids]))
+    for (const a of relinkAttacks(plays.filter((p) => !ids.includes(p.clientId)))) save(a)
+    // 得点が減ったときだけ、手動のサーブ権の切替をやめる（残りの得点から決める）
+    if (points.some((p) => ids.includes(p.clientId))) setOverride(null)
+  }
+
   const minus = (side: Side) => {
     const pt = lastPointOf(points, side)
     if (!pt) return
+    // 自動の得点なら元の1本（エース・ミスなど）も消す。得点だけ消すと集計にエースが残る
+    const source = plays.find((p) => p.clientId === pt.sourceId)
+    const ids = source ? idsToRemove(source, points) : [pt.clientId]
+    removeIds(ids)
     // −1 ではサーブ権を変えない
-    setOverride({ setId: set.id, serving: state.serving, atPoints: points.length - 1 })
-    remove(pt.clientId)
+    const rest = points.filter((p) => !ids.includes(p.clientId)).length
+    setOverride({ setId: set.id, serving: state.serving, atPoints: rest })
+  }
+
+  const entries = entriesOf(records)
+  const lastEntry = entries.at(-1) ?? null
+
+  /** 1本（または手動の得点）を消す。その1本の得点も消えて、サーブ権は残りの得点から決まる */
+  const removeEntry = (entry: Entry) => removeIds(idsToRemove(entry, points))
+
+  /** 評価の修正。直後のアタックの prevReception も付け直す */
+  const editEntry = (entry: Entry) => {
+    save(entry)
+    if (entry.kind === 'point') return
+    for (const a of relinkAttacks(plays.map((p) => (p.clientId === entry.clientId ? entry : p)))) save(a)
   }
 
   const switchServing = (side: Side) => {
@@ -123,7 +154,9 @@ export default function RecordScreen({ repo }: Props) {
 
   // サーブ権が移って入力欄が替わっても、直前の1本に付け足せるようにする
   const attachSide =
-    lastSaved && lastSaved.setId === set.id && canAttach(lastSaved) ? panelOf(lastSaved) : null
+    lastSaved && lastSaved.setId === set.id && !removed.has(lastSaved.clientId) && canAttach(lastSaved)
+      ? panelOf(lastSaved)
+      : null
 
   return (
     <section className="record" aria-label={`${DEMO_MATCH.date} ${DEMO_OPPONENT.name}`}>
@@ -201,42 +234,78 @@ export default function RecordScreen({ repo }: Props) {
         <p className="rally-hint">ラリー中：得点したチームの数字をタップ</p>
       )}
 
-      {view !== null ? (
-        <div className="row">
-          <button type="button" className="btn btn-sm" onClick={() => setView(null)}>
-            次の1本の入力に戻る
-          </button>
-        </div>
-      ) : (
-        attachSide !== null &&
-        attachSide !== shown && (
+      {!showList &&
+        (view !== null ? (
           <div className="row">
-            <button type="button" className="btn btn-sm" onClick={() => setView(attachSide)}>
-              直前の1本（{attachSide === 'us' ? 'サーブ' : 'レシーブ'}）に付け足す
+            <button type="button" className="btn btn-sm" onClick={() => setView(null)}>
+              次の1本の入力に戻る
             </button>
           </div>
-        )
+        ) : (
+          attachSide !== null &&
+          attachSide !== shown && (
+            <div className="row">
+              <button type="button" className="btn btn-sm" onClick={() => setView(attachSide)}>
+                直前の1本（{attachSide === 'us' ? 'サーブ' : 'レシーブ'}）に付け足す
+              </button>
+            </div>
+          )
+        ))}
+
+      {showList && (
+        <RecordList
+          entries={entries}
+          players={DEMO_PLAYERS}
+          oppPlayers={DEMO_OPP_PLAYERS}
+          onRemove={removeEntry}
+          onEdit={editEntry}
+          onClose={() => setShowList(false)}
+        />
       )}
 
-      {/* 入力欄はどちらも描いたまま隠し、入力途中の内容と直前の1本を残す */}
-      <div hidden={shown !== 'us'}>
+      {/* 入力欄はどちらも描いたまま隠し、一覧を開いても入力途中の内容と直前の1本を残す */}
+      <div hidden={showList || shown !== 'us'}>
         <ServePanel
           key={set.id}
           setId={set.id}
           players={DEMO_PLAYERS}
           oppPlayers={DEMO_OPP_PLAYERS}
           onSave={savePlay}
+          removed={removed}
         />
       </div>
-      <div hidden={shown !== 'opp'}>
+      <div hidden={showList || shown !== 'opp'}>
         <ReceptionPanel
           key={set.id}
           setId={set.id}
           players={DEMO_PLAYERS}
           oppPlayers={DEMO_OPP_PLAYERS}
           onSave={savePlay}
+          removed={removed}
         />
       </div>
+
+      <footer className="record-foot">
+        <span className="num last-entry">
+          {lastEntry ? describeEntry(lastEntry, DEMO_PLAYERS, DEMO_OPP_PLAYERS) : '—'}
+        </span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          disabled={!lastEntry}
+          onClick={() => lastEntry && removeEntry(lastEntry)}
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          className="btn btn-sm"
+          aria-pressed={showList}
+          onClick={() => setShowList((v) => !v)}
+        >
+          一覧
+        </button>
+      </footer>
     </section>
   )
 }
