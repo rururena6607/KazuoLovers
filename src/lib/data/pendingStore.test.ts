@@ -1,6 +1,7 @@
 // 送信待ちを端末に残す動き（T-15）。IndexedDB の代わりに、メモリ上の PendingStore を使う。
 import { describe, expect, it } from 'vitest'
 import type { AnyRecord, PointRecord, SetRecords } from '../../contracts/index.ts'
+import { isPendingOp } from './pendingStore.ts'
 import {
   createRecordRepository,
   opClientId,
@@ -159,5 +160,29 @@ describe('送信待ちを端末に残す', () => {
     const repo = createRecordRepository(net.remote, broken)
     await repo.save(point('p1', 1))
     expect(net.rows.has('p1')).toBe(true)
+  })
+})
+
+describe('isPendingOp（IndexedDB から読むときの確認）', () => {
+  // 記録の種類ごとに 1 つずつ。AnyRecord の種類が増えたら、ここも足す（型で漏れを検出する）
+  const kinds: Record<AnyRecord['kind'], true> = { serve: true, reception: true, attack: true, opp_attack: true, point: true }
+
+  it('すべての記録の種類の送信待ちを読む（相手のスパイクを読み飛ばして、開き直すと消えることがないように）', () => {
+    for (const kind of Object.keys(kinds)) {
+      expect(isPendingOp({ type: 'save', rec: { kind, clientId: 'c', setId: 's' } }), kind).toBe(true)
+    }
+  })
+
+  it('削除の送信待ちも読む', () => {
+    expect(isPendingOp({ type: 'remove', clientId: 'c' })).toBe(true)
+  })
+
+  it('前の版が残した形の違うものは読まない（知らない種類、clientId がない、型が違う）', () => {
+    expect(isPendingOp({ type: 'save', rec: { kind: 'unknown', clientId: 'c', setId: 's' } })).toBe(false)
+    expect(isPendingOp({ type: 'save', rec: { kind: 'serve', setId: 's' } })).toBe(false)
+    expect(isPendingOp({ type: 'save', rec: { kind: 'toString', clientId: 'c', setId: 's' } })).toBe(false)
+    expect(isPendingOp({ type: 'remove' })).toBe(false)
+    expect(isPendingOp(null)).toBe(false)
+    expect(isPendingOp('x')).toBe(false)
   })
 })
