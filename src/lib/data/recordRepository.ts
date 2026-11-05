@@ -1,7 +1,7 @@
-// RecordRepository の本物（T-14）。送る先（RemoteRecordStore）は差し替えられ、テストでは偽物を渡す。
+// RecordRepository の本物（T-14・T-15）。送る先（RemoteRecordStore）と送信待ちの置き場（PendingStore）は
+// 差し替えられ、テストでは偽物を渡す。
 // 保存と削除は、まず端末の送信待ちに入れて購読している画面にすぐ反映し、そのあとで送る。
-// 送れなかったものは送信待ちに残り、次の保存か retry() で送り直す。
-// 送信待ちを IndexedDB に保つこと、自動の再送は T-15 で足す。
+// 送れなかったものは送信待ちに残り、次の保存か retry() で送り直す。自動の再送は autoRetry.ts。
 import type {
   AnyRecord,
   RecordRepository,
@@ -21,7 +21,25 @@ export interface RemoteRecordStore {
 }
 
 /** 送信待ちの操作。同じ clientId は新しい操作で置き換える */
-type Op = { type: 'save'; rec: AnyRecord } | { type: 'remove'; clientId: string }
+export type PendingOp = { type: 'save'; rec: AnyRecord } | { type: 'remove'; clientId: string }
+type Op = PendingOp
+
+export const opClientId = (op: PendingOp) => (op.type === 'save' ? op.rec.clientId : op.clientId)
+
+/** 送信待ちを、再読み込みやアプリを閉じても残す置き場（IndexedDB。pendingStore.ts） */
+export interface PendingStore {
+  loadAll(): Promise<PendingOp[]>
+  /** 同じ clientId は置き換える */
+  put(op: PendingOp): Promise<void>
+  delete(clientId: string): Promise<void>
+}
+
+/** 端末に残さない置き場。テストや、IndexedDB が使えないときに使う */
+export const memoryPendingStore = (): PendingStore => ({
+  loadAll: async () => [],
+  put: async () => {},
+  delete: async () => {},
+})
 
 interface Subscription {
   matchId: string
@@ -43,7 +61,7 @@ const without = <T extends { clientId: string }>(list: T[], clientId: string) =>
 
 /** 操作を1つ重ねた SetRecords を返す。元は変えない。その記録のセットがなければ null */
 function applyOp(sets: SetRecords[], op: Op): SetRecords[] | null {
-  const clientId = op.type === 'save' ? op.rec.clientId : op.clientId
+  const clientId = opClientId(op)
   const removed = sets.map((s) => ({
     setId: s.setId,
     serves: without(s.serves, clientId),
@@ -72,7 +90,19 @@ function applyOp(sets: SetRecords[], op: Op): SetRecords[] | null {
   return removed
 }
 
-export function createRecordRepository(remote: RemoteRecordStore): RecordRepository {
+/** 端末への保存が失敗しても（容量不足・プライベートブラウズなど）、記録の送信は止めない */
+async function keep(action: () => Promise<void>): Promise<void> {
+  try {
+    await action()
+  } catch (e) {
+    console.warn('送信待ちを端末に残せませんでした', e)
+  }
+}
+
+export function createRecordRepository(
+  remote: RemoteRecordStore,
+  store: PendingStore = memoryPendingStore(),
+): RecordRepository {
   const pending = new Map<string, Op>()
   const pendingListeners = new Set<(count: number) => void>()
   const subs = new Set<Subscription>()
@@ -148,7 +178,10 @@ export function createRecordRepository(remote: RemoteRecordStore): RecordReposit
         if (op.type === 'save') await remote.upsert(op.rec)
         else await remote.remove(clientId)
         // 送っているあいだに同じ記録が変わっていたら、新しいほうを送信待ちに残す
-        if (pending.get(clientId) === op) pending.delete(clientId)
+        if (pending.get(clientId) === op) {
+          pending.delete(clientId)
+          await keep(() => store.delete(clientId))
+        }
       } catch (e) {
         // 1本が送れなくても、ほかの記録は送る。残ったものは送信待ちの件数に出る
         console.error('記録を送れませんでした', clientId, e)
@@ -173,12 +206,36 @@ export function createRecordRepository(remote: RemoteRecordStore): RecordReposit
     return flushing
   }
 
-  const enqueue = (clientId: string, op: Op) => {
+  /** 戻し終わるまでに保存・削除した記録。送り終わって送信待ちから消えても、古いものを戻さない */
+  let touchedBeforeRestore: Set<string> | null = new Set()
+
+  const enqueue = async (clientId: string, op: Op) => {
+    touchedBeforeRestore?.add(clientId)
     pending.set(clientId, op)
     notifyPending()
     applyToSubs(op)
-    return flush()
+    // 送る前に端末に残す。送っている途中でアプリが閉じても、次に開いたときに送り直せる
+    await keep(() => store.put(op))
+    await flush()
   }
+
+  // 前に開いたときの送信待ちを戻して送る。戻すあいだに保存された記録は、そちらを新しいものとする
+  const restoring = (async () => {
+    let ops: PendingOp[] = []
+    await keep(async () => {
+      ops = await store.loadAll()
+    })
+    const touched = touchedBeforeRestore ?? new Set<string>()
+    touchedBeforeRestore = null
+    const restored = ops.filter((op) => !touched.has(opClientId(op)))
+    if (restored.length === 0) return
+    for (const op of restored) {
+      pending.set(opClientId(op), op)
+      applyToSubs(op)
+    }
+    notifyPending()
+    await flush()
+  })()
 
   return {
     save(rec) {
@@ -209,6 +266,7 @@ export function createRecordRepository(remote: RemoteRecordStore): RecordReposit
       return () => pendingListeners.delete(onChange)
     },
     async retry() {
+      await restoring
       await flush()
       await Promise.all([...subs].filter((s) => !s.sets && !s.loading).map((s) => load(s)))
     },
