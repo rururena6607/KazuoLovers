@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { MIN_SAMPLE } from '../../contracts/index.ts'
 import './analysis.css'
 import { Heatmap } from './Heatmap.tsx'
+import { ScoreTrend, SetResults } from './SetResults.tsx'
 import { MetricRow, StatTable } from './StatTable.tsx'
+import { emptySet, scoreTrend, setResults } from './setResults.ts'
 import {
   TAB_LABELS,
   heatmap,
@@ -51,10 +53,33 @@ const EMPTY_MESSAGE = {
 
 const referenceNote = `* は ${MIN_SAMPLE} 本未満の参考値です。`
 
-/** 分析画面（T-21）。範囲を選び、サーブ・レシーブ・アタックの全体指標、選手別表、ヒートマップを出す */
-export function AnalysisScreen({ data }: { data: AnalysisData }) {
-  const [kind, setKind] = useState<ScopeKind>('all')
-  const [targets, setTargets] = useState<Partial<Record<ScopeKind, string>>>({})
+/** 最初に選んでおく対象（試合・セット・相手の id）。範囲が全体・練習なら空 */
+function targetOf(scope: Scope | undefined): string {
+  switch (scope?.kind) {
+    case 'match':
+      return scope.matchId
+    case 'set':
+      return scope.setId
+    case 'opponent':
+      return scope.opponentId
+    default:
+      return ''
+  }
+}
+
+/** 分析画面（T-21、T-22）。範囲を選び、サーブ・レシーブ・アタックの全体指標、選手別表、ヒートマップを出す */
+export function AnalysisScreen({
+  data,
+  initialScope,
+}: {
+  data: AnalysisData
+  /** 最初に開く範囲。試合の結果画面から開くときは `{ kind: 'match', matchId }` を渡す */
+  initialScope?: Scope
+}) {
+  const [kind, setKind] = useState<ScopeKind>(initialScope?.kind ?? 'all')
+  const [targets, setTargets] = useState<Partial<Record<ScopeKind, string>>>(
+    initialScope ? { [initialScope.kind]: targetOf(initialScope) } : {},
+  )
   const [tab, setTab] = useState<Tab>('serve')
 
   const pickable = kind === 'match' || kind === 'set' || kind === 'opponent'
@@ -67,6 +92,12 @@ export function AnalysisScreen({ data }: { data: AnalysisData }) {
     const scope = toScope(kind, target)
     return scope ? recordsInScope(scope, data) : []
   }, [kind, target, data])
+
+  // セット別の結果の行をタップしたら、そのセットの分析に移る
+  const openSet = (setId: string) => {
+    setKind('set')
+    setTargets({ ...targets, set: setId })
+  }
 
   // タブを切り替えても、範囲の集計はやり直さない。表示用の値は、記録・タブ・選手が変わったときだけ作る
   const overview = useMemo(
@@ -84,6 +115,16 @@ export function AnalysisScreen({ data }: { data: AnalysisData }) {
   const practice = useMemo(
     () => (kind === 'practice' ? practiceView(sets, data.players) : null),
     [kind, sets, data.players],
+  )
+  // セット別の結果と得点の推移は、タブによらない
+  const results = useMemo(
+    () => (kind === 'match' && target ? setResults(target, data) : null),
+    [kind, target, data],
+  )
+  const trend = useMemo(
+    () =>
+      kind === 'set' && target ? scoreTrend(sets[0] ?? emptySet(target), data.players) : null,
+    [kind, target, sets, data.players],
   )
 
   return (
@@ -138,10 +179,12 @@ export function AnalysisScreen({ data }: { data: AnalysisData }) {
             ))}
           </div>
 
+          {results && <SetResults table={results} onSelect={openSet} />}
           <MetricRow metrics={overview.metrics} />
           {overview.heat && <Heatmap map={overview.heat} />}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
           <StatTable title="選手別" nameHeader="選手" table={overview.players} />
+          {trend && <ScoreTrend rows={trend} />}
           <p className="an-note">{referenceNote}</p>
         </>
       )}
