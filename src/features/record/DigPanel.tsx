@@ -47,7 +47,13 @@ export default function DigPanel({ setId, players, oppPlayers, onSave, onAddOpp 
 
       <div className="row results" role="group" aria-label="相手のスパイクの結果">
         {DIG_RESULTS.map((r) => (
-          <button key={r.value} type="button" className="btn" onClick={() => confirm(r.value)}>
+          <button
+            key={r.value}
+            type="button"
+            // 「拾えず」「相手ミス」は A〜D より文字が多いので、少し広くして折り返さない
+            className={r.label.length > 1 ? 'btn btn-word' : 'btn'}
+            onClick={() => confirm(r.value)}
+          >
             {r.label}
           </button>
         ))}
