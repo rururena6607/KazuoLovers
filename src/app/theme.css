@@ -300,6 +300,35 @@ button {
   flex: 1;
 }
 
+/* 練習モードの成績 */
+.practice-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  border: var(--border);
+}
+.practice-stats > div {
+  padding: 4px 0;
+  text-align: center;
+  border-right: 1px solid var(--line-soft);
+}
+.practice-stats > div:last-child {
+  border-right: 0;
+}
+.practice-stats dt {
+  font-size: 11px;
+  color: var(--mute);
+}
+.practice-stats dd {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+/* 参考値（本数が MIN_SAMPLE 未満）は薄く（要件定義書 6 章「数値の表示」） */
+.is-ref {
+  color: var(--mute);
+}
+
 .panel {
   display: flex;
   flex-direction: column;
