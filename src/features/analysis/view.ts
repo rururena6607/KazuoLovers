@@ -15,6 +15,9 @@ import { zoneOf } from '../../lib/court/index.ts'
 import {
   attackStatsByPlayer,
   attackStatsOf,
+  digLandingShare,
+  digOriginShare,
+  digStatsOf,
   practiceStatsByPlayer,
   practiceStatsByTargetZone,
   practiceStatsOf,
@@ -40,8 +43,8 @@ export interface AnalysisData {
 }
 
 /**
- * 範囲の選択。all は試合（kind = match）すべて、practice は練習（kind = practice）すべて。
- * 練習は公式の指標と物差しが違うので、全体には混ぜない。
+ * 範囲の選択。all は試合（kind = match）すべて、practice は練習（kind = practice）と紅白戦（kind = scrimmage）すべて。
+ * 練習と紅白戦は公式の指標と物差しが違うので、試合の全体・相手には混ぜない（要件定義書 5 章「紅白戦の個人成績」）。
  */
 export type Scope =
   | { kind: 'all' }
@@ -80,7 +83,7 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
       case 'all':
         return match.kind === 'match'
       case 'practice':
-        return match.kind === 'practice'
+        return match.kind === 'practice' || match.kind === 'scrimmage'
       case 'match':
         return match.id === scope.matchId
       case 'set':
@@ -91,6 +94,29 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
   }
   return data.records.filter((r) => inScope(r.setId))
 }
+
+/**
+ * 範囲「練習」の記録を、紅白戦とサーブ練習に分ける（5 章）。紅白戦は試合と同じ指標で、サーブ練習は成功率・ゾーン的中率で出す。
+ * 紅白戦のサーブには狙ったゾーンがなく、結果が ace／in／miss なので、サーブ練習の指標には混ぜない
+ */
+export function splitPractice(
+  sets: readonly SetRecords[],
+  data: AnalysisData,
+): { scrimmage: SetRecords[]; drill: SetRecords[] } {
+  const matchById = new Map(data.matches.map((m) => [m.id, m]))
+  const kindOfSet = new Map(data.gameSets.map((gs) => [gs.id, matchById.get(gs.matchId)?.kind]))
+  return {
+    scrimmage: sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage'),
+    drill: sets.filter((r) => kindOfSet.get(r.setId) === 'practice'),
+  }
+}
+
+/**
+ * 紅白戦の画面の注。数え方が未決のBチームの成績は、まだ出していない（要件定義書 12 章「紅白戦の読み替えの規則」）。
+ * 試合の選手別表と同じく、自チームのAの記録（サーブ・サーブレシーブ・アタック）で、その部員の成績を出す
+ */
+export const SCRIMMAGE_NOTE =
+  '紅白戦は、Aチーム側（自チームとして記録した分）の記録で集計しています。Bチームに入った部員のBチームとしての成績は、数え方が決まっていないため、まだ含めていません。'
 
 // ---- 表示用の値 ----
 
@@ -335,6 +361,45 @@ export const COURSE_NOTES = {
   serve: 'コース割合は、着弾点を記録したサーブに対する割合です（コートの外のアウトは含み、ネットは除く）。',
   reception: 'コース割合は、受けた位置を記録したレシーブに対する割合です。',
 } as const
+
+// ---- 相手のスパイク（F-25） ----
+
+export interface DigView {
+  /** 本数・拾えた率・拾えず・相手ミス */
+  metrics: Metric[]
+  /** 落ちた位置の割合（自コート） */
+  landing: Heatmap
+  /** 打ってくる位置の割合（相手コート） */
+  origin: Heatmap
+}
+
+/**
+ * 相手のスパイクの分析（要件定義書 5 章「相手のスパイク」）。
+ * 拾えた率 = 拾えた（A〜D）÷（拾えた ＋ 拾えず）。相手ミスは分母に入れない（分母の本数が 10 本未満なら「*」）。
+ * 位置の割合は、位置を記録した本数に対するそのゾーンの割合
+ */
+export function digView(sets: readonly SetRecords[]): DigView {
+  const records = sets.flatMap((s) => s.oppAttacks ?? [])
+  const stats = digStatsOf(records)
+  const landing = digLandingShare(records, zoneOf)
+  const origin = digOriginShare(records, zoneOf)
+  const toValues = (share: typeof landing): ZoneValue[] =>
+    [...share.zones].map(([zone, z]) => ({ zone, value: z.share, count: z.count }))
+  return {
+    metrics: [
+      { label: '相手のスパイク', cell: countCell(stats.total) },
+      { label: '拾えた率', cell: rateCell(stats.digRate, stats.dug + stats.killed) },
+      { label: '拾えず', cell: countCell(stats.killed) },
+      { label: '相手ミス', cell: countCell(stats.oppError) },
+    ],
+    landing: makeHeatmap('own', '落ちた位置の割合', toValues(landing)),
+    origin: makeHeatmap('opponent', '打ってくる位置の割合', toValues(origin)),
+  }
+}
+
+/** 相手のスパイクの分母の説明（画面の注） */
+export const DIG_NOTE =
+  '拾えた率は、拾えた（A〜D）÷（拾えた＋拾えず）です（相手ミスは含めません）。位置の割合は、位置を記録したスパイクに対する割合です。'
 
 // ---- 練習 ----
 
