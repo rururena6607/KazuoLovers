@@ -13,9 +13,11 @@ import type {
 import { getSupabase } from './supabaseClient.ts'
 import {
   COLUMNS,
+  checkColSplits,
   checkMatch,
   checkOpponentPlayerNumber,
   checkPlayer,
+  duplicateNumberMessage,
   matchFromRow,
   matchToRow,
   nextSetNo,
@@ -59,8 +61,11 @@ export interface TeamData {
   listOpponents(teamId: string): Promise<Opponent[]>
   createOpponent(teamId: string, name: string): Promise<Opponent>
   listOpponentPlayers(opponentId: string): Promise<OpponentPlayer[]>
-  /** 同じ背番号がすでにあれば、それを返す（試合中にその場で足す。F-04） */
-  addOpponentPlayer(opponentId: string, number: number): Promise<OpponentPlayer>
+  /**
+   * 同じ背番号がすでにあれば、それを返す（試合中にその場で足す。F-04）。
+   * playerId（自チームの部員）を渡すと、紅白戦の B チームの選手として結ぶ（F-27）
+   */
+  addOpponentPlayer(opponentId: string, number: number, playerId?: string): Promise<OpponentPlayer>
   /** 日付の新しい順 */
   listMatches(teamId: string): Promise<Match[]>
   /** 試合を作り、第1セットも作る */
@@ -68,6 +73,8 @@ export interface TeamData {
   listSets(matchId: string): Promise<GameSet[]>
   /** 次のセットを作る（F-05）。上限（5セット）なら reject する */
   createNextSet(matchId: string): Promise<GameSet>
+  /** セットの相手コートの列の境目を保存する（F-24）。0 ≤ 左 < 右 ≤ 1 */
+  updateColSplits(setId: string, colSplit1: number, colSplit2: number): Promise<GameSet>
   loadMatch(matchId: string): Promise<MatchContext>
 }
 
@@ -183,18 +190,52 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
       )
     },
     listOpponentPlayers,
-    async addOpponentPlayer(opponentId, number) {
+    async addOpponentPlayer(opponentId, number, playerId) {
       fail(checkOpponentPlayerNumber(number))
-      // (opponent_id, number) は一意なので、すでにあれば同じ行が返る
-      return opponentPlayerFromRow(
-        check(
+      if (playerId === undefined) {
+        // (opponent_id, number) は一意なので、すでにあれば同じ行が返る
+        return opponentPlayerFromRow(
+          check(
+            await db()
+              .from('opponent_players')
+              .upsert({ opponent_id: opponentId, number }, { onConflict: 'opponent_id,number' })
+              .select(COLUMNS.opponent_players)
+              .single<OpponentPlayerRow>(),
+          ),
+        )
+      }
+      // 紅白戦：B チームに部員を入れる。すでに入っていれば、それを返す
+      const found = check(
+        await db()
+          .from('opponent_players')
+          .select(COLUMNS.opponent_players)
+          .eq('opponent_id', opponentId)
+          .eq('player_id', playerId)
+          .returns<OpponentPlayerRow[]>(),
+      )
+      const existing = found[0]
+      if (existing) return opponentPlayerFromRow(existing)
+      const inserted = await db()
+        .from('opponent_players')
+        .insert({ opponent_id: opponentId, number, player_id: playerId })
+        .select(COLUMNS.opponent_players)
+        .single<OpponentPlayerRow>()
+      if (inserted.error?.code === '23505') {
+        // 一意制約に当たった。ほかの端末が同じ部員を同時に足したのなら、その行を返す。
+        // そうでなければ、背番号が B チームの別の選手と重なっている
+        const again = check(
           await db()
             .from('opponent_players')
-            .upsert({ opponent_id: opponentId, number }, { onConflict: 'opponent_id,number' })
             .select(COLUMNS.opponent_players)
-            .single<OpponentPlayerRow>(),
-        ),
-      )
+            .eq('opponent_id', opponentId)
+            .eq('player_id', playerId)
+            .returns<OpponentPlayerRow[]>(),
+        )
+        const raced = again[0]
+        if (raced) return opponentPlayerFromRow(raced)
+        throw new Error(duplicateNumberMessage(number))
+      }
+      return opponentPlayerFromRow(check(inserted))
     },
     async listMatches(teamId) {
       return check(
@@ -226,6 +267,19 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
       const setNo = nextSetNo(await listSets(matchId))
       fail(setNo === null ? 'これ以上セットを作れません（5セットまで）。' : null)
       return insertSet(matchId, setNo ?? 1)
+    },
+    async updateColSplits(setId, colSplit1, colSplit2) {
+      fail(checkColSplits(colSplit1, colSplit2))
+      return setFromRow(
+        check(
+          await db()
+            .from('sets')
+            .update({ col_split_1: colSplit1, col_split_2: colSplit2 })
+            .eq('id', setId)
+            .select(COLUMNS.sets)
+            .single<SetRow>(),
+        ),
+      )
     },
     async loadMatch(matchId) {
       const match = matchFromRow(

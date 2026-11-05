@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { GameSet, Player } from '../../contracts/index.ts'
 import { DEFAULT_SET_POINTS } from '../../contracts/index.ts'
 import {
+  checkColSplits,
   checkMatch,
   checkOpponentPlayerNumber,
   checkPlayer,
+  duplicateNumberMessage,
   matchFromRow,
   matchToRow,
   nextSetNo,
@@ -176,6 +178,23 @@ describe('セットの列の境目（F-24）', () => {
   })
 })
 
+describe('checkColSplits（列の境目の確認）', () => {
+  it('0 ≤ 左 < 右 ≤ 1 なら通す（端の値も含む）', () => {
+    expect(checkColSplits(0.3, 0.7)).toBeNull()
+    expect(checkColSplits(0, 1)).toBeNull()
+    expect(checkColSplits(0.01, 0.02)).toBeNull()
+  })
+
+  it('等しい・逆順・範囲外・数でないものは、理由を返す（DB の check 制約と同じ）', () => {
+    expect(checkColSplits(0.5, 0.5)).toMatch('左の境目')
+    expect(checkColSplits(0.7, 0.3)).toMatch('左の境目')
+    expect(checkColSplits(-0.01, 0.5)).toMatch('0〜1')
+    expect(checkColSplits(0.5, 1.01)).toMatch('0〜1')
+    expect(checkColSplits(Number.NaN, 0.5)).toMatch('正しくありません')
+    expect(checkColSplits(0.2, Number.POSITIVE_INFINITY)).toMatch('正しくありません')
+  })
+})
+
 describe('nextSetNo', () => {
   it('いちばん大きいセットの番号の次。セットがなければ 1、5セットあれば null', () => {
     expect(nextSetNo([])).toBe(1)
@@ -197,5 +216,15 @@ describe('toDataErrorMessage', () => {
       '通信できませんでした。電波のよい場所でもう一度試してください。',
     )
     expect(toDataErrorMessage({ message: 'boom' })).toBe('保存できませんでした（boom）')
+  })
+
+  it('1 件のはずが 0 件（PGRST116）は、英語のまま出さず、日本語にする', () => {
+    expect(toDataErrorMessage({ message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116' })).toBe(
+      'データが見つかりませんでした（ないか、このチームのデータではありません）。',
+    )
+  })
+
+  it('紅白戦の B チームの背番号の重複は、背番号を入れた文にする', () => {
+    expect(duplicateNumberMessage(8)).toBe('紅白戦の B チームに、背番号 8 の選手がすでにいます。ほかの背番号で入れてください。')
   })
 })

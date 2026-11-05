@@ -1,6 +1,7 @@
 // 記録画面が試合を開くための MatchRepository（contracts、#36）のデモ版と、MatchContext を手元で直す関数。
 // 本物は lib/data の teamData（ひろし、T-10）。キーがない手元ではデモ（下の createDemoMatchSource）を使う。
 import type { GameSet, MatchRepository, OpponentPlayer } from '../../contracts/index.ts'
+import { checkColSplits, duplicateNumberMessage } from '../../lib/data/teamRows.ts'
 import {
   DEMO_MATCH,
   DEMO_OPPONENT,
@@ -32,6 +33,8 @@ export const parseOppNumber = (text: string): number | null => {
 export function createDemoMatchSource(): MatchRepository {
   let setCount = 1
   let oppPlayers: OpponentPlayer[] = [...DEMO_OPP_PLAYERS]
+  /** 動かした列の境目を、セットごとに残す（デモは画面を開いているあいだだけ） */
+  const splitSets = new Map<string, GameSet>()
 
   return {
     loadMatch: (matchId) => {
@@ -49,15 +52,29 @@ export function createDemoMatchSource(): MatchRepository {
       return Promise.resolve({
         match: DEMO_MATCH,
         opponent: DEMO_OPPONENT,
-        sets: DEMO_SETS.slice(0, setCount),
+        sets: DEMO_SETS.slice(0, setCount).map((s) => splitSets.get(s.id) ?? s),
         players,
         opponentPlayers: [...oppPlayers],
       })
     },
-    addOpponentPlayer: (opponentId, number) => {
-      const found = oppPlayers.find((o) => o.number === number)
+    addOpponentPlayer: (opponentId, number, playerId) => {
+      const sameTeam = oppPlayers.filter((o) => o.opponentId === opponentId)
+      if (playerId !== undefined) {
+        // 紅白戦：本物（teamData）と同じ。同じ部員なら、それを返す。別の部員と背番号が重なるなら reject する
+        const linked = sameTeam.find((o) => o.playerId === playerId)
+        if (linked) return Promise.resolve(linked)
+        if (sameTeam.some((o) => o.number === number)) {
+          return Promise.reject(new Error(duplicateNumberMessage(number)))
+        }
+      }
+      const found = sameTeam.find((o) => o.number === number)
       if (found) return Promise.resolve(found)
-      const added: OpponentPlayer = { id: `o${number}`, opponentId, number }
+      const added: OpponentPlayer = {
+        id: `o${number}`,
+        opponentId,
+        number,
+        ...(playerId !== undefined ? { playerId } : {}),
+      }
       oppPlayers = [...oppPlayers, added].sort((a, b) => a.number - b.number)
       return Promise.resolve(added)
     },
@@ -66,6 +83,15 @@ export function createDemoMatchSource(): MatchRepository {
       if (!next) return Promise.reject(new Error('これ以上セットを作れません（5セットまで）。'))
       setCount += 1
       return Promise.resolve(next)
+    },
+    updateColSplits: (setId, colSplit1, colSplit2) => {
+      const base = DEMO_SETS.find((s) => s.id === setId)
+      if (!base) return Promise.reject(new Error('セットが見つかりませんでした。'))
+      const invalid = checkColSplits(colSplit1, colSplit2)
+      if (invalid) return Promise.reject(new Error(invalid))
+      const updated: GameSet = { ...base, colSplit1, colSplit2 }
+      splitSets.set(setId, updated)
+      return Promise.resolve(updated)
     },
   }
 }
