@@ -140,6 +140,14 @@ export function checkMatch(m: MatchInput): string | null {
   return null
 }
 
+/** 列の境目が正しいか。0 ≤ 左 < 右 ≤ 1（contracts の GameSet と DB の check と同じ）。正しくなければ理由を返す */
+export function checkColSplits(colSplit1: number, colSplit2: number): string | null {
+  if (!Number.isFinite(colSplit1) || !Number.isFinite(colSplit2)) return '列の境目の値が正しくありません。'
+  if (colSplit1 < 0 || colSplit2 > 1) return '列の境目は、コートの内側（0〜1）に置いてください。'
+  if (colSplit1 >= colSplit2) return '左の境目は、右の境目より左に置いてください。'
+  return null
+}
+
 export const playerToRow = (teamId: string, p: PlayerInput) => ({
   ...(p.id ? { id: p.id } : {}),
   team_id: teamId,

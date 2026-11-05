@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GameSet, Player } from '../../contracts/index.ts'
 import { DEFAULT_SET_POINTS } from '../../contracts/index.ts'
 import {
+  checkColSplits,
   checkMatch,
   checkOpponentPlayerNumber,
   checkPlayer,
@@ -173,6 +174,23 @@ describe('セットの列の境目（F-24）', () => {
     expect(empty).not.toHaveProperty('colSplit2')
     const half = setFromRow({ ...base, col_split_1: 0.3, col_split_2: null })
     expect(half).not.toHaveProperty('colSplit1')
+  })
+})
+
+describe('checkColSplits（列の境目の確認）', () => {
+  it('0 ≤ 左 < 右 ≤ 1 なら通す（端の値も含む）', () => {
+    expect(checkColSplits(0.3, 0.7)).toBeNull()
+    expect(checkColSplits(0, 1)).toBeNull()
+    expect(checkColSplits(0.01, 0.02)).toBeNull()
+  })
+
+  it('等しい・逆順・範囲外・数でないものは、理由を返す（DB の check 制約と同じ）', () => {
+    expect(checkColSplits(0.5, 0.5)).toMatch('左の境目')
+    expect(checkColSplits(0.7, 0.3)).toMatch('左の境目')
+    expect(checkColSplits(-0.01, 0.5)).toMatch('0〜1')
+    expect(checkColSplits(0.5, 1.01)).toMatch('0〜1')
+    expect(checkColSplits(Number.NaN, 0.5)).toMatch('正しくありません')
+    expect(checkColSplits(0.2, Number.POSITIVE_INFINITY)).toMatch('正しくありません')
   })
 })
 

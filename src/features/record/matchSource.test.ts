@@ -53,3 +53,19 @@ describe('createDemoMatchSource', () => {
     await expect(src.loadMatch('nope')).rejects.toThrow()
   })
 })
+
+describe('createDemoMatchSource の列の境目と紅白戦', () => {
+  it('動かした列の境目を保存し、開き直しても残る。正しくない境目は断る', async () => {
+    const src = createDemoMatchSource()
+    const first = (await src.loadMatch(DEMO_MATCH.id)).sets[0]!
+    const saved = await src.updateColSplits(first.id, 0.25, 0.6)
+    expect(saved).toMatchObject({ id: first.id, colSplit1: 0.25, colSplit2: 0.6 })
+    expect((await src.loadMatch(DEMO_MATCH.id)).sets[0]).toMatchObject({ colSplit1: 0.25, colSplit2: 0.6 })
+    await expect(src.updateColSplits(first.id, 0.7, 0.3)).rejects.toThrow()
+    await expect(src.updateColSplits('nothing', 0.3, 0.7)).rejects.toThrow()
+  })
+
+  it('デモの試合は紅白戦ではないので、B チームの選手は足せない', async () => {
+    await expect(createDemoMatchSource().addScrimmagePlayer('o', 'p')).rejects.toThrow()
+  })
+})

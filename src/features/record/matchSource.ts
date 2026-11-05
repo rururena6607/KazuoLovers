@@ -1,6 +1,7 @@
 // 記録画面が試合を開くための MatchRepository（contracts、#36）のデモ版と、MatchContext を手元で直す関数。
 // 本物は lib/data の teamData（ひろし、T-10）。キーがない手元ではデモ（下の createDemoMatchSource）を使う。
 import type { GameSet, MatchRepository, OpponentPlayer } from '../../contracts/index.ts'
+import { checkColSplits } from '../../lib/data/teamRows.ts'
 import {
   DEMO_MATCH,
   DEMO_OPPONENT,
@@ -32,6 +33,8 @@ export const parseOppNumber = (text: string): number | null => {
 export function createDemoMatchSource(): MatchRepository {
   let setCount = 1
   let oppPlayers: OpponentPlayer[] = [...DEMO_OPP_PLAYERS]
+  /** 動かした列の境目を、セットごとに残す（デモは画面を開いているあいだだけ） */
+  const splitSets = new Map<string, GameSet>()
 
   return {
     loadMatch: (matchId) => {
@@ -49,7 +52,7 @@ export function createDemoMatchSource(): MatchRepository {
       return Promise.resolve({
         match: DEMO_MATCH,
         opponent: DEMO_OPPONENT,
-        sets: DEMO_SETS.slice(0, setCount),
+        sets: DEMO_SETS.slice(0, setCount).map((s) => splitSets.get(s.id) ?? s),
         players,
         opponentPlayers: [...oppPlayers],
       })
@@ -67,5 +70,16 @@ export function createDemoMatchSource(): MatchRepository {
       setCount += 1
       return Promise.resolve(next)
     },
+    updateColSplits: (setId, colSplit1, colSplit2) => {
+      const base = DEMO_SETS.find((s) => s.id === setId)
+      if (!base) return Promise.reject(new Error('セットが見つかりませんでした。'))
+      const invalid = checkColSplits(colSplit1, colSplit2)
+      if (invalid) return Promise.reject(new Error(invalid))
+      const updated: GameSet = { ...base, colSplit1, colSplit2 }
+      splitSets.set(setId, updated)
+      return Promise.resolve(updated)
+    },
+    // デモの試合は紅白戦ではないので、B チームの選手を入れる場面がない
+    addScrimmagePlayer: () => Promise.reject(new Error('デモの試合は紅白戦ではありません。')),
   }
 }

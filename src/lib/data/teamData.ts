@@ -13,6 +13,7 @@ import type {
 import { getSupabase } from './supabaseClient.ts'
 import {
   COLUMNS,
+  checkColSplits,
   checkMatch,
   checkOpponentPlayerNumber,
   checkPlayer,
@@ -68,6 +69,10 @@ export interface TeamData {
   listSets(matchId: string): Promise<GameSet[]>
   /** 次のセットを作る（F-05）。上限（5セット）なら reject する */
   createNextSet(matchId: string): Promise<GameSet>
+  /** セットの相手コートの列の境目を保存する（F-24）。0 ≤ 左 < 右 ≤ 1 */
+  updateColSplits(setId: string, colSplit1: number, colSplit2: number): Promise<GameSet>
+  /** 紅白戦の B チームに自チームの選手を入れる（F-27）。すでに入っていれば、それを返す */
+  addScrimmagePlayer(opponentId: string, playerId: string): Promise<OpponentPlayer>
   loadMatch(matchId: string): Promise<MatchContext>
 }
 
@@ -226,6 +231,44 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
       const setNo = nextSetNo(await listSets(matchId))
       fail(setNo === null ? 'これ以上セットを作れません（5セットまで）。' : null)
       return insertSet(matchId, setNo ?? 1)
+    },
+    async updateColSplits(setId, colSplit1, colSplit2) {
+      fail(checkColSplits(colSplit1, colSplit2))
+      return setFromRow(
+        check(
+          await db()
+            .from('sets')
+            .update({ col_split_1: colSplit1, col_split_2: colSplit2 })
+            .eq('id', setId)
+            .select(COLUMNS.sets)
+            .single<SetRow>(),
+        ),
+      )
+    },
+    async addScrimmagePlayer(opponentId, playerId) {
+      // B チームの選手の背番号は、その選手のもの（opponent_players の背番号は B チームの中で一意）
+      const player = check(
+        await db().from('players').select('id,number').eq('id', playerId).single<{ id: string; number: number }>(),
+      )
+      const found = check(
+        await db()
+          .from('opponent_players')
+          .select(COLUMNS.opponent_players)
+          .eq('opponent_id', opponentId)
+          .eq('player_id', playerId)
+          .returns<OpponentPlayerRow[]>(),
+      )
+      const existing = found[0]
+      if (existing) return opponentPlayerFromRow(existing)
+      return opponentPlayerFromRow(
+        check(
+          await db()
+            .from('opponent_players')
+            .insert({ opponent_id: opponentId, number: player.number, player_id: playerId })
+            .select(COLUMNS.opponent_players)
+            .single<OpponentPlayerRow>(),
+        ),
+      )
     },
     async loadMatch(matchId) {
       const match = matchFromRow(

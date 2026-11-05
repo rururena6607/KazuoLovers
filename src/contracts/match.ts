@@ -21,4 +21,14 @@ export interface MatchRepository {
   addOpponentPlayer(opponentId: string, number: number): Promise<OpponentPlayer>
   /** 次のセットを作る（F-05「セット終了 → 次のセット」）。5セットあれば reject する */
   createNextSet(matchId: string): Promise<GameSet>
+  /**
+   * セットの相手コートの列の境目を保存し、保存したセットを返す（F-24）。
+   * 0 ≤ colSplit1 < colSplit2 ≤ 1。両方そろえて渡す（片方だけは不可）。範囲外なら reject する
+   */
+  updateColSplits(setId: string, colSplit1: number, colSplit2: number): Promise<GameSet>
+  /**
+   * 紅白戦の B チーム（opponentId の相手チーム）に、自チームの選手を入れる（F-27）。
+   * 背番号はその選手のもの。すでに入っていれば、それを返す。背番号が B チームの別の選手と重なるときは reject する
+   */
+  addScrimmagePlayer(opponentId: string, playerId: string): Promise<OpponentPlayer>
 }
