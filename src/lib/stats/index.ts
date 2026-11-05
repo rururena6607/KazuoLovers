@@ -8,3 +8,4 @@ export {
   receptionStatsOfResults,
   serveStatsOf,
 } from './metrics.ts'
+export * from './aggregate.ts'
