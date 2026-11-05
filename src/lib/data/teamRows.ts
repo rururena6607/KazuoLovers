@@ -130,10 +130,29 @@ export function checkOpponentPlayerNumber(n: number): string | null {
   return isNumber(n) ? null : '背番号は 0〜99 で入れてください。'
 }
 
+/** 紅白戦の B チームの名前。試合ごとに自動で作る（contracts の Match.kind のコメント） */
+export const SCRIMMAGE_TEAM_NAME = '紅白戦（B チーム）'
+
+/**
+ * 相手チームの一覧から、紅白戦の B チームを除く。
+ * B チームは試合ごとに自動で作る内部のものなので、「相手チーム」の一覧や選択肢、「相手」の範囲には出さない。
+ * 除くもの：紅白戦の試合が使っている相手チーム。または、既定の名前（「紅白戦（B チーム）」）で、
+ * ふつうの試合も練習も使っていないもの（試合の作成や削除が途中で止まって残った B チーム）
+ */
+export function withoutScrimmageTeams<T extends { id: string; name: string }>(
+  opponents: readonly T[],
+  matches: readonly { kind: Match['kind']; opponent_id: string | null }[],
+): T[] {
+  const scrimmage = new Set(matches.filter((m) => m.kind === 'scrimmage').map((m) => m.opponent_id))
+  const ordinary = new Set(matches.filter((m) => m.kind !== 'scrimmage').map((m) => m.opponent_id))
+  return opponents.filter((o) => !scrimmage.has(o.id) && !(o.name === SCRIMMAGE_TEAM_NAME && !ordinary.has(o.id)))
+}
+
 export function checkMatch(m: MatchInput): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(m.date)) return '日付を選んでください。'
   if (m.kind === 'practice' && m.opponentId !== null) return '練習には相手を付けません。'
-  if (m.kind === 'scrimmage' && m.opponentId === null) return '紅白戦には B チームを付けてください。'
+  // B チームは作るときに自動で作る（試合ごと）。ふつうの相手チームを紅白戦に付けると、消すときに巻き込む
+  if (m.kind === 'scrimmage' && m.opponentId !== null) return '紅白戦の B チームは自動で作ります（相手を付けません）。'
   if (!Number.isInteger(m.setPoints) || m.setPoints < 1 || m.setPoints > 50) {
     return '1セットの点数は 1〜50 で入れてください。'
   }
