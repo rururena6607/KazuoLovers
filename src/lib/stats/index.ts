@@ -10,3 +10,4 @@ export {
 } from './metrics.ts'
 export * from './aggregate.ts'
 export * from './aiSummary.ts'
+export * from './course.ts'

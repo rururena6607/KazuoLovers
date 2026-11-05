@@ -4,10 +4,12 @@ import type {
   Match,
   Opponent,
   Player,
+  ReceptionRecord,
   ServeRecord,
   SetRecords,
 } from '../../contracts/index.ts'
 import {
+  courseHeatmap,
   heatmap,
   overallMetrics,
   playerTable,
@@ -331,5 +333,57 @@ describe('scopeOptions', () => {
       '2026-10-20 A高校 第2セット',
       '2026-10-25 B高校 第1セット',
     ])
+  })
+})
+
+describe('courseHeatmap（コース割合）', () => {
+  // 相手コートの奥の列（y=0.5）は x=0.1→ゾーン1、0.5→6。ネット側（y=0.1）は x=0.1→2
+  const sets: SetRecords[] = [
+    {
+      ...empty('s1'),
+      serves: [
+        ...Array.from({ length: 12 }, (_, i) => serve({ clientId: `a${i}`, toX: 0.1, toY: 0.5 })), // ゾーン1：12 本
+        ...Array.from({ length: 3 }, (_, i) => serve({ clientId: `b${i}`, toX: 0.1, toY: 0.1 })), // ゾーン2：3 本
+        serve({ clientId: 'net', toX: null, toY: null, result: 'miss', missType: 'net', reception: null }),
+      ],
+    },
+  ]
+
+  it('サーブ：相手コートの着弾ゾーン別の割合と本数を出す（12/15 = 80.0%、3/15 = 20.0%）', () => {
+    const map = courseHeatmap('serve', sets)
+    expect(map.side).toBe('opponent')
+    expect(map.metric).toBe('コース割合')
+    const by = new Map(map.cells.map((c) => [c.zone, c]))
+    expect(by.get(1)?.text).toBe('80.0%（12）')
+    expect(by.get(2)?.text).toBe('20.0%*（3）') // 3 本は 10 本未満なので参考値
+    expect(by.get(3)?.text).toBe('0.0%*（0）')
+  })
+
+  it('割合が大きいほど濃く、最大のゾーンが 1', () => {
+    const by = new Map(courseHeatmap('serve', sets).cells.map((c) => [c.zone, c]))
+    expect(by.get(1)?.intensity).toBe(1)
+    expect(by.get(2)?.intensity).toBe(0.25) // 20 ÷ 80
+  })
+
+  it('レシーブ：自コートの受けた位置別。位置のないレシーブは分母に入れない', () => {
+    const rec = (id: string, atX: number | null, atY: number | null): ReceptionRecord => ({
+      kind: 'reception',
+      clientId: id,
+      setId: 's1',
+      receiverId: 'p7',
+      oppServerId: null,
+      oppServeType: null,
+      atX,
+      atY,
+      result: 'A',
+      recordedAt: '2026-11-05T00:00:00Z',
+    })
+    const map = courseHeatmap('reception', [
+      { ...empty('s1'), receptions: [rec('r1', 0.5, 0.5), rec('r2', 0.5, 0.5), rec('r3', 0.9, 0.5), rec('r4', 0.9, 0.5), rec('r5', null, null)] },
+    ])
+    expect(map.side).toBe('own')
+    const by = new Map(map.cells.map((c) => [c.zone, c]))
+    expect(by.get(6)?.text).toBe('50.0%*（2）') // 2/4
+    expect(by.get(1)?.text).toBe('50.0%*（2）')
   })
 })
