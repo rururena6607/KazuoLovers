@@ -1,7 +1,7 @@
 // 本物（Supabase）につなぐか、デモで動かすか。
 // キー（VITE_SUPABASE_URL・VITE_SUPABASE_ANON_KEY）がなければデモにする。キーのない手元・テスト・発表の予備で使う。
-import type { RecordRepository } from '../contracts/index.ts'
-import { createDemoMatchSource, type MatchSource } from '../features/record/matchSource.ts'
+import type { MatchRepository, RecordRepository } from '../contracts/index.ts'
+import { createDemoMatchSource } from '../features/record/matchSource.ts'
 import { DEMO_MATCH, DEMO_PRACTICE, DEMO_PRACTICE_SET, DEMO_SETS } from '../features/record/demo.ts'
 import { auth, type Auth } from '../lib/data/auth.ts'
 import { createFakeRecordRepository } from '../lib/data/fakeRecordRepository.ts'
@@ -10,11 +10,11 @@ import { teamData, type TeamData } from '../lib/data/teamData.ts'
 import { loadDemoTeam, loadTeamFrom, type LoadTeam } from './analysisData.ts'
 
 export type Backend =
-  | { kind: 'demo'; repo: RecordRepository; source: MatchSource; loadTeam: LoadTeam }
+  | { kind: 'demo'; repo: RecordRepository; source: MatchRepository; loadTeam: LoadTeam }
   | {
       kind: 'supabase'
       repo: RecordRepository
-      source: MatchSource
+      source: MatchRepository
       loadTeam: LoadTeam
       teamData: TeamData
       auth: Auth

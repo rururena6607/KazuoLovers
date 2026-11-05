@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type {
+  MatchContext,
   OpponentPlayer,
   PlayRecord,
   RecordRepository,
@@ -8,7 +9,6 @@ import type {
 } from '../../contracts/index.ts'
 import { toggleServing } from '../../lib/rally/index.ts'
 import { loadBestOf, saveBestOf, type BestOf } from './bestOf.ts'
-import type { MatchContext } from './matchSource.ts'
 import { describeEntry, entriesOf, idsToRemove, relinkAttacks, type Entry } from './history.ts'
 import { newIds } from './ids.ts'
 import { prevReceptionOf, rallyTurnOf } from './attack.ts'

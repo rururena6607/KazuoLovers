@@ -3,12 +3,12 @@ import Court from '../../components/Court.tsx'
 import { allZones, zoneColor } from '../../components/courtGeometry.ts'
 import {
   MIN_SAMPLE,
+  type MatchContext,
   type RecordRepository,
   type ServeRecord,
   type ServeType,
 } from '../../contracts/index.ts'
 import { zoneOf } from '../../lib/court/index.ts'
-import type { MatchContext } from '../record/matchSource.ts'
 import { newIds } from '../record/ids.ts'
 import { SERVE_TYPES, playerLabel, toggle } from '../record/labels.ts'
 import { useMatchRecords } from '../record/useMatchRecords.ts'

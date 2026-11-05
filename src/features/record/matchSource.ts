@@ -1,7 +1,6 @@
-// 記録画面が試合を開き、試合中に相手の背番号やセットを足すための入口。
-// 形は #36 の contracts/MatchRepository と同じ。#36 がマージされたら、この型を contracts のものに替える。
+// 記録画面が試合を開くための MatchRepository（contracts、#36）のデモ版と、MatchContext を手元で直す関数。
 // 本物は lib/data の teamData（ひろし、T-10）。キーがない手元ではデモ（下の createDemoMatchSource）を使う。
-import type { GameSet, Match, Opponent, OpponentPlayer, Player } from '../../contracts/index.ts'
+import type { GameSet, MatchRepository, OpponentPlayer } from '../../contracts/index.ts'
 import {
   DEMO_MATCH,
   DEMO_OPPONENT,
@@ -11,27 +10,6 @@ import {
   DEMO_PRACTICE_SET,
   DEMO_SETS,
 } from './demo.ts'
-
-/** 記録画面が試合を開くときに要るもの */
-export interface MatchContext {
-  match: Match
-  /** 練習は null */
-  opponent: Opponent | null
-  /** セットの番号の順 */
-  sets: GameSet[]
-  /** 背番号の順。引退した選手も含む（過去の記録の表示に使う）。選ぶときは active の選手だけを出す */
-  players: Player[]
-  /** 背番号の順 */
-  opponentPlayers: OpponentPlayer[]
-}
-
-export interface MatchSource {
-  loadMatch(matchId: string): Promise<MatchContext>
-  /** 同じ背番号がすでにあれば、それを返す（F-04） */
-  addOpponentPlayer(opponentId: string, number: number): Promise<OpponentPlayer>
-  /** 次のセットを作る（F-05）。5セットあれば reject する */
-  createNextSet(matchId: string): Promise<GameSet>
-}
 
 /** 足した背番号を、背番号の順に入れる（同じ選手なら入れない） */
 export const withOppPlayer = (list: readonly OpponentPlayer[], p: OpponentPlayer): OpponentPlayer[] =>
@@ -49,9 +27,9 @@ export const parseOppNumber = (text: string): number | null => {
 
 /**
  * デモの試合と練習。セットは本物と同じく、第1セットから1つずつ増える。
- * フェイクの RecordRepository には5セット分の id を先に渡しておく（App.tsx）
+ * フェイクの RecordRepository には5セット分の id を先に渡しておく（app/backend.ts）
  */
-export function createDemoMatchSource(): MatchSource {
+export function createDemoMatchSource(): MatchRepository {
   let setCount = 1
   let oppPlayers: OpponentPlayer[] = [...DEMO_OPP_PLAYERS]
 

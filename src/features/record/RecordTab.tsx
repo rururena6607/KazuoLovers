@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { RecordRepository } from '../../contracts/index.ts'
+import type { MatchContext, MatchRepository, RecordRepository } from '../../contracts/index.ts'
 import PracticeScreen from '../practice/PracticeScreen.tsx'
-import { withOppPlayer, withSet, type MatchContext, type MatchSource } from './matchSource.ts'
+import { withOppPlayer, withSet } from './matchSource.ts'
 import RecordScreen from './RecordScreen.tsx'
 
 // 記録のタブ：選んだ試合を読み、試合なら記録画面、練習（kind が practice）なら練習モードを出す。
@@ -9,7 +9,7 @@ import RecordScreen from './RecordScreen.tsx'
 
 interface Props {
   repo: RecordRepository
-  source: MatchSource
+  source: MatchRepository
   /** 開く試合。null ならまだ選んでいない */
   matchId: string | null
   /** 試合を選びに行く（管理のタブ） */
