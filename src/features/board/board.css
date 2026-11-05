@@ -1,0 +1,121 @@
+/* 作戦ボード（F-23） */
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+/* 半面を大きく出す。画面の高さに収める */
+.board-court {
+  display: block;
+  width: 100%;
+  max-height: 62dvh;
+  /* 駒を動かす・描くときに画面がスクロールしないようにする */
+  touch-action: none;
+  user-select: none;
+}
+.board-court.is-arrow,
+.board-court.is-defend,
+.board-court.is-attack {
+  cursor: crosshair;
+}
+
+.board-floor {
+  fill: var(--surface);
+}
+.board-line {
+  fill: none;
+  stroke: var(--line-soft);
+  stroke-width: 0.6;
+}
+.board-outline {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.board-net {
+  stroke: var(--line);
+  stroke-width: 1.6;
+}
+
+/* 自チームの駒（名前）と相手の駒（番号） */
+.board-piece {
+  cursor: grab;
+}
+.board-piece circle {
+  fill: var(--selected);
+  stroke: var(--surface);
+  stroke-width: 0.8;
+}
+.board-piece text {
+  fill: var(--on-selected);
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.board-piece.is-opp circle {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 2 1;
+}
+.board-piece.is-opp text {
+  fill: var(--ink);
+}
+
+/* 矢印とエリア。色だけに頼らず、守る範囲は点線・打つ範囲は実線で見分ける */
+.board-arrow {
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+.board-arrowhead {
+  fill: var(--ink);
+}
+.board-area {
+  stroke-width: 0.8;
+}
+.board-area.is-defend {
+  fill: rgb(37 99 235 / 0.22);
+  stroke: rgb(37 99 235);
+  stroke-dasharray: 2 1.5;
+}
+.board-area.is-attack {
+  fill: rgb(220 38 38 / 0.22);
+  stroke: rgb(220 38 38);
+}
+.is-preview {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.board-court.is-erase .board-arrow,
+.board-court.is-erase .board-area {
+  cursor: pointer;
+}
+
+/* スタメンのボタンに付けるポジションの番号 */
+.board-pos {
+  display: inline-block;
+  min-width: 1.4em;
+  margin-right: 4px;
+  font-weight: 700;
+}
+
+/* 相手の駒の背番号を足す・変える */
+.board-opp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.board-opp input {
+  width: 4em;
+  min-height: 34px;
+  padding: 0 8px;
+  border: var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px; /* 16px 未満だと iPhone が入力のたびに拡大する */
+}

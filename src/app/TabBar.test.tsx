@@ -3,10 +3,11 @@ import { renderToString } from 'react-dom/server'
 import TabBar from './TabBar.tsx'
 
 describe('TabBar', () => {
-  it('3つのタブを出す', () => {
+  it('4つのタブを出す（作戦ボードを含む）', () => {
     const html = renderToString(<TabBar active="record" onSelect={() => {}} />)
     expect(html).toContain('記録')
     expect(html).toContain('分析')
+    expect(html).toContain('作戦')
     expect(html).toContain('管理')
   })
 
