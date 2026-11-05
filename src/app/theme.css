@@ -175,6 +175,12 @@ button {
   font-size: 18px;
   font-weight: 700;
 }
+/* 結果ボタンのうち文字の多いもの（相手のスパイクの「拾えず」「相手ミス」） */
+.results > .btn-word {
+  flex-grow: 1.8;
+  font-size: 15px;
+  white-space: nowrap;
+}
 /* 選手・背番号のボタン。横にはみ出さず折り返して、全員が見えるようにする */
 .chips {
   display: flex;

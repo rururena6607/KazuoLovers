@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type {
   AttackRecord,
+  OppAttackRecord,
   PointRecord,
   ReceptionRecord,
   ServeRecord,
@@ -77,6 +78,22 @@ const attack = (over: Partial<AttackRecord>): AttackRecord => ({
   ...over,
 })
 
+const dig = (over: Partial<OppAttackRecord>): OppAttackRecord => ({
+  kind: 'opp_attack',
+  clientId: 'dg',
+  setId: 's1',
+  hitterId: null,
+  diggerId: 'p7',
+  fromX: null,
+  fromY: null,
+  toX: null,
+  toY: null,
+  speed: null,
+  result: 'A',
+  recordedAt: t(0),
+  ...over,
+})
+
 describe('describeEntry', () => {
   const d = (e: Parameters<typeof describeEntry>[0]) => describeEntry(e, DEMO_PLAYERS, DEMO_OPP_PLAYERS)
 
@@ -149,5 +166,39 @@ describe('editableGrade / withGrade', () => {
     expect(editableGrade(reception({ result: 'opp_miss' }))).toBeNull()
     expect(withGrade(reception({}), 'D')).toMatchObject({ result: 'D' })
     expect(withGrade(serve({}), 'A')).toMatchObject({ reception: 'A' })
+  })
+})
+
+describe('相手のスパイク（F-25）', () => {
+  it('一覧に時刻順で並び、拾えず・相手ミスはその得点もいっしょに消す', () => {
+    const sv = serve({ clientId: 'sv1', recordedAt: t(1) })
+    const dg = dig({ clientId: 'dg1', result: 'killed', recordedAt: t(2) })
+    const auto = point({ clientId: 'pt1', side: 'opp', cause: 'opp_kill', sourceId: 'dg1', recordedAt: t(3) })
+    const set: SetRecords = {
+      setId: 's1',
+      serves: [sv],
+      receptions: [],
+      attacks: [],
+      oppAttacks: [dg],
+      points: [auto],
+    }
+    expect(entriesOf(set).map((e) => e.clientId)).toEqual(['sv1', 'dg1'])
+    expect(idsToRemove(dg, set.points)).toEqual(['dg1', 'pt1'])
+  })
+  it('oppAttacks がない古いデータでも一覧を作れる', () => {
+    const set: SetRecords = { setId: 's1', serves: [], receptions: [], attacks: [], points: [] }
+    expect(entriesOf(set)).toEqual([])
+  })
+  it('拾った評価（A〜D）だけ直せる。拾えず・相手ミスは得点が変わるので直せない', () => {
+    expect(editableGrade(dig({ result: 'B' }))).toBe('B')
+    expect(editableGrade(dig({ result: 'killed' }))).toBeNull()
+    expect(editableGrade(dig({ result: 'opp_error' }))).toBeNull()
+    expect(withGrade(dig({ result: 'B' }), 'D')).toMatchObject({ result: 'D' })
+    expect(withGrade(dig({ result: 'killed' }), 'D')).toMatchObject({ result: 'killed' })
+  })
+  it('拾ったあとのアタックは切り返しなので prevReception は null（7 章）', () => {
+    const dg = dig({ result: 'A', recordedAt: t(1) })
+    const at = attack({ clientId: 'at', prevReception: 'A', recordedAt: t(2) })
+    expect(relinkAttacks([dg, at])).toEqual([{ ...at, prevReception: null }])
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AttackRecord, ReceptionRecord, ServeRecord } from '../../contracts/index.ts'
+import type { AttackRecord, OppAttackRecord, ReceptionRecord, ServeRecord } from '../../contracts/index.ts'
 import {
   buildAttack,
   emptyAttackDraft,
@@ -147,6 +147,40 @@ describe('rallyTurnOf（T-36 部活フィードバック）', () => {
     }
     expect(rallyTurnOf(cont)).toBe('opp')
     expect(rallyTurnOf(null)).toBe('opp')
+  })
+  it('相手のスパイクを拾ったあと（A〜D）は自チームが打つ番（F-25）', () => {
+    const dug: OppAttackRecord = {
+      kind: 'opp_attack',
+      clientId: 'd0',
+      setId: 's1',
+      hitterId: null,
+      diggerId: 'p7',
+      fromX: null,
+      fromY: null,
+      toX: null,
+      toY: null,
+      speed: null,
+      result: 'B',
+      recordedAt: t(3),
+    }
+    expect(rallyTurnOf(dug)).toBe('us')
+    expect(prevReceptionOf(dug)).toBeNull()
+  })
+})
+
+describe('withArrowTap（両面のコート図のタップ）', () => {
+  const draft = emptyAttackDraft()
+
+  it('自コートは打った位置、相手コートは打った方向（F-20）', () => {
+    const a = withArrowTap(draft, 'own', { x: 0.7, y: 0.3 })
+    expect(a).toMatchObject({ from: { x: 0.7, y: 0.3 }, to: null })
+    const b = withArrowTap(a, 'opponent', { x: 0.2, y: 0.8 })
+    expect(b).toMatchObject({ from: { x: 0.7, y: 0.3 }, to: { x: 0.2, y: 0.8 } })
+  })
+  it('どちらから押してもよく、押し直したら置き換える', () => {
+    const a = withArrowTap(draft, 'opponent', { x: 0.2, y: 0.8 })
+    const b = withArrowTap(a, 'opponent', { x: 0.5, y: 0.5 })
+    expect(b).toMatchObject({ from: null, to: { x: 0.5, y: 0.5 } })
   })
 })
 
