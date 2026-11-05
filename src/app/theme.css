@@ -480,30 +480,45 @@ button {
   }
 }
 
-/* iPad の横向き・PC：左に得点とサーブ権、右に入力欄。どちらも画面の高さに収める */
+/* iPad の横向き・PC：上に「相手名・得点・サーブ権」を1段で並べ、
+   入力欄は左にボタン（選手・種類・結果）、右にコート図を置く。スクロールせずに1本を入力できるようにする */
 @media (min-width: 960px) and (orientation: landscape) {
   .app-main {
     max-width: 1180px;
   }
-  .record {
-    display: grid;
-    grid-template-columns: minmax(300px, 2fr) 3fr;
-    align-items: start;
-    column-gap: 16px;
-  }
   .record-side {
-    position: sticky;
-    top: 6px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
   }
-  .record > .record-foot {
-    grid-column: 1 / -1;
+  .record-side > * {
+    flex: 1 1 100%;
   }
-  .court,
-  .endline {
+  .record-side > .scoreboard,
+  .record-side > .seg {
+    flex: 1 1 360px;
+  }
+  .record-side > .seg > .btn {
+    min-height: 100%;
+  }
+  .panel {
+    display: block;
+  }
+  .panel > * {
+    margin: 0 calc(55% + 16px) 6px 0;
+  }
+  .panel > .court,
+  .panel > .endline {
+    float: right;
+    clear: right;
+    width: 55%;
     max-width: none;
+    margin: 0 0 6px;
   }
-  /* 縦の高さが足りなくならないよう、コート図は画面の高さに合わせる */
-  .record-input .court {
-    max-height: 48dvh;
+  .panel::after {
+    content: '';
+    display: block;
+    clear: both;
   }
 }
