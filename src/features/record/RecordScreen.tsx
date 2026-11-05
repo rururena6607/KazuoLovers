@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
   MatchContext,
   OpponentPlayer,
@@ -7,12 +7,14 @@ import type {
   SetRecords,
   Side,
 } from '../../contracts/index.ts'
+import { playerColorMap } from '../../components/playerColors.ts'
 import { toggleServing } from '../../lib/rally/index.ts'
 import { loadBestOf, saveBestOf, type BestOf } from './bestOf.ts'
 import { describeEntry, entriesOf, idsToRemove, relinkAttacks, type Entry } from './history.ts'
 import { newIds } from './ids.ts'
 import { prevReceptionOf, rallyTurnOf } from './attack.ts'
 import RallyPanel from './RallyPanel.tsx'
+import { recentServeMarks } from './recentMarks.ts'
 import ReceptionPanel from './ReceptionPanel.tsx'
 import RecordList from './RecordList.tsx'
 import ScoreButton from './ScoreButton.tsx'
@@ -106,8 +108,12 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
   /** 選ぶときは今いる選手だけ。表示（一覧・直前の1本）は引退した選手も含める */
   const activePlayers = ctx.players.filter((p) => p.active)
   const oppPlayers = ctx.opponentPlayers
+  /** 選手ごとの色（F-22）。引退した選手も含めて決めるので、分析画面と同じ色になる */
+  const colors = useMemo(() => playerColorMap(ctx.players), [ctx.players])
 
   const records = recordsOf(set.id)
+  /** このセットの直前のサーブの着弾点（F-22「記録画面は直前の数本」） */
+  const recentMarks = recentServeMarks(records?.serves ?? [], ctx.players, colors)
   const points = records?.points ?? []
   const plays: PlayRecord[] = records
     ? [...records.serves, ...records.receptions, ...records.attacks]
@@ -398,6 +404,7 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
             onSave={savePlay}
             removed={removed}
             onAddOpp={onAddOpp}
+            recentMarks={recentMarks}
           />
         </div>
         <div hidden={showList || showAttack || shown !== 'opp'}>
