@@ -6,10 +6,13 @@ import {
   EMPTY_LINEUP,
   OPP_SPOTS,
   OUR_SPOTS,
+  addOpp,
   clampPoint,
   ellipseOf,
   isBigEnough,
   pieceAt,
+  removeOpp,
+  renumberOpp,
   rotate,
   rotateBoard,
   togglePlayer,
@@ -64,7 +67,6 @@ describe('立ち位置', () => {
     const s: BoardState = { ...EMPTY_BOARD, lineup: L, moved: { p3: { x: 1, y: 2 } } }
     expect(pieceAt(s, 'p1')).toEqual(OUR_SPOTS[0])
     expect(pieceAt(s, 'p3')).toEqual({ x: 1, y: 2 })
-    expect(pieceAt(s, 'opp-4')).toEqual(OPP_SPOTS[3])
     expect(pieceAt(s, 'nobody')).toBeNull()
   })
   it('ローテーションしたら動かした位置は消える', () => {
@@ -86,5 +88,29 @@ describe('図形', () => {
   })
   it('コートの外には出さない', () => {
     expect(clampPoint({ x: -5, y: 999 })).toEqual({ x: 0, y: BOARD_H })
+  })
+})
+
+describe('相手の駒（背番号）', () => {
+  it('足した順に相手のポジション1〜6の立ち位置に置き、7つ目からはくり返す', () => {
+    let s = EMPTY_BOARD
+    ;[12, 3, 7, 1, 9, 10, 4].forEach((n, i) => (s = addOpp(s, n, `o${i}`)))
+    expect(s.opp.map((o) => o.number)).toEqual([12, 3, 7, 1, 9, 10, 4])
+    expect(pieceAt(s, 'o0')).toEqual(OPP_SPOTS[0])
+    expect(pieceAt(s, 'o5')).toEqual(OPP_SPOTS[5])
+    expect(pieceAt(s, 'o6')).toEqual(OPP_SPOTS[0])
+  })
+  it('同じ背番号は足さない・同じ番号には変えない', () => {
+    let s = addOpp(addOpp(EMPTY_BOARD, 5, 'a'), 8, 'b')
+    expect(addOpp(s, 5, 'c').opp).toHaveLength(2)
+    expect(renumberOpp(s, 'b', 5)).toBe(s)
+    s = renumberOpp(s, 'b', 11)
+    expect(s.opp.map((o) => o.number)).toEqual([5, 11])
+  })
+  it('外すと動かした位置も消える', () => {
+    const s: BoardState = { ...addOpp(EMPTY_BOARD, 5, 'a'), moved: { a: { x: 1, y: 1 } } }
+    const r = removeOpp(s, 'a')
+    expect(r.opp).toEqual([])
+    expect(r.moved).toEqual({})
   })
 })

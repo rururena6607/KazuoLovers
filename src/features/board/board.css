@@ -101,3 +101,21 @@
   margin-right: 4px;
   font-weight: 700;
 }
+
+/* 相手の駒の背番号を足す・変える */
+.board-opp {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.board-opp input {
+  width: 4em;
+  min-height: 34px;
+  padding: 0 8px;
+  border: var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 16px; /* 16px 未満だと iPhone が入力のたびに拡大する */
+}

@@ -37,8 +37,11 @@ export const OUR_SPOTS: readonly Point[] = [
 /** 相手の基本の立ち位置。相手はネットを下に見るので、自チームを上下・左右に返した位置 */
 export const OPP_SPOTS: readonly Point[] = OUR_SPOTS.map((p) => ({ x: BOARD_W - p.x, y: BOARD_H - p.y }))
 
-/** 相手の駒の id（ポジション 1〜6） */
-export const oppPieceId = (pos: number) => `opp-${pos}`
+/** 相手の駒。背番号で出す（足す・番号を変える・外すができる） */
+export interface OppPiece {
+  id: string
+  number: number
+}
 
 /**
  * ローテーション（サイドアウトで時計回り）：ポジション2の選手が1へ、1が6へ…3が2へ。
@@ -88,13 +91,37 @@ export const ellipseOf = (from: Point, to: Point) => ({
 
 export interface BoardState {
   lineup: Lineup
-  /** 動かした駒の位置（選手の id または opp-1〜6）。ないものは基本の立ち位置 */
+  /** 動かした駒の位置（選手の id または相手の駒の id）。ないものは基本の立ち位置 */
   moved: Readonly<Record<string, Point>>
+  /** 相手の駒を出すか */
   showOpp: boolean
+  /** 相手の駒。足した順に、相手のポジション 1〜6 の立ち位置に置く */
+  opp: readonly OppPiece[]
   shapes: readonly Shape[]
 }
 
-export const EMPTY_BOARD: BoardState = { lineup: EMPTY_LINEUP, moved: {}, showOpp: false, shapes: [] }
+export const EMPTY_BOARD: BoardState = { lineup: EMPTY_LINEUP, moved: {}, showOpp: false, opp: [], shapes: [] }
+
+/**
+ * 相手の駒を足す。すでに同じ背番号があれば足さない。
+ * 7つ目からも足せる（交代の説明用）。置く場所は立ち位置を順にくり返す
+ */
+export function addOpp(state: BoardState, number: number, id: string): BoardState {
+  if (state.opp.some((o) => o.number === number)) return state
+  return { ...state, opp: [...state.opp, { id, number }] }
+}
+
+/** 相手の駒の背番号を変える。ほかの駒と同じ番号にはしない */
+export function renumberOpp(state: BoardState, id: string, number: number): BoardState {
+  if (state.opp.some((o) => o.number === number && o.id !== id)) return state
+  return { ...state, opp: state.opp.map((o) => (o.id === id ? { ...o, number } : o)) }
+}
+
+/** 相手の駒を外す（動かした位置も消す） */
+export function removeOpp(state: BoardState, id: string): BoardState {
+  const moved = Object.fromEntries(Object.entries(state.moved).filter(([k]) => k !== id))
+  return { ...state, opp: state.opp.filter((o) => o.id !== id), moved }
+}
 
 /** 駒の今の位置 */
 export function pieceAt(state: BoardState, pieceId: string): Point | null {
@@ -102,8 +129,8 @@ export function pieceAt(state: BoardState, pieceId: string): Point | null {
   if (moved) return moved
   const ours = state.lineup.indexOf(pieceId)
   if (ours !== -1) return OUR_SPOTS[ours] ?? null
-  const m = /^opp-([1-6])$/.exec(pieceId)
-  return m ? (OPP_SPOTS[Number(m[1]) - 1] ?? null) : null
+  const opp = state.opp.findIndex((o) => o.id === pieceId)
+  return opp === -1 ? null : (OPP_SPOTS[opp % OPP_SPOTS.length] ?? null)
 }
 
 /** ローテーションしたら、駒は基本の立ち位置に戻す（動かした位置は前のローテのもの） */

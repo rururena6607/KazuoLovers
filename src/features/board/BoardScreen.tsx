@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Player } from '../../contracts/index.ts'
 import {
   ATTACK_LINE,
@@ -7,12 +7,13 @@ import {
   COURT,
   EMPTY_BOARD,
   NET_Y,
-  OPP_SPOTS,
+  addOpp,
   clampPoint,
   ellipseOf,
   isBigEnough,
-  oppPieceId,
   pieceAt,
+  removeOpp,
+  renumberOpp,
   rotateBoard,
   togglePlayer,
   type AreaTone,
@@ -20,6 +21,7 @@ import {
   type Point,
   type Shape,
 } from './board.ts'
+import { parseOppNumber } from '../record/matchSource.ts'
 import './board.css'
 
 // 作戦ボード（F-23）。監督がローテーションや守る範囲を説明するのに使う。
@@ -54,6 +56,37 @@ export default function BoardScreen({ players }: Props) {
   const [drag, setDrag] = useState<Drag>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const nextId = useRef(0)
+  /** 背番号を変えている相手の駒。null なら新しく足す */
+  const [editingOpp, setEditingOpp] = useState<string | null>(null)
+  const [oppText, setOppText] = useState('')
+  const oppNumber = parseOppNumber(oppText)
+
+  const newId = (prefix: string) => {
+    nextId.current += 1
+    return `${prefix}-${nextId.current}`
+  }
+
+  /** 相手の駒を足す、または選んでいる駒の背番号を変える */
+  const submitOpp = (e: FormEvent) => {
+    e.preventDefault()
+    if (oppNumber === null) return
+    setBoard((b) => (editingOpp ? renumberOpp(b, editingOpp, oppNumber) : addOpp(b, oppNumber, newId('opp'))))
+    setOppText('')
+    setEditingOpp(null)
+  }
+
+  const pickOpp = (id: string, number: number) => {
+    if (editingOpp === id) {
+      setEditingOpp(null)
+      setOppText('')
+      return
+    }
+    setEditingOpp(id)
+    setOppText(String(number))
+  }
+
+  /** 同じ背番号の駒がもうあるか（変えている駒自身は除く） */
+  const oppTaken = oppNumber !== null && board.opp.some((o) => o.number === oppNumber && o.id !== editingOpp)
 
   const nameOf = new Map(players.map((p) => [p.id, p.name]))
   const starters = board.lineup.filter((id): id is string => id !== null)
@@ -209,6 +242,51 @@ export default function BoardScreen({ players }: Props) {
         </button>
       </div>
 
+      {board.showOpp && (
+        <form className="board-opp" onSubmit={submitOpp} aria-label="相手の駒（背番号）">
+          <span className="chips-label">相手</span>
+          {board.opp.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              className="btn chip num"
+              aria-pressed={editingOpp === o.id}
+              aria-label={`相手の ${o.number} 番（押すと番号を変える）`}
+              onClick={() => pickOpp(o.id, o.number)}
+            >
+              {o.number}
+            </button>
+          ))}
+          <input
+            className="num"
+            aria-label={editingOpp ? '新しい背番号' : '足す背番号'}
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={2}
+            placeholder="番号"
+            value={oppText}
+            onChange={(e) => setOppText(e.target.value)}
+          />
+          <button type="submit" className="btn btn-sm" disabled={oppNumber === null || oppTaken}>
+            {editingOpp ? '番号を変える' : '足す'}
+          </button>
+          {editingOpp && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                setBoard((b) => removeOpp(b, editingOpp))
+                setEditingOpp(null)
+                setOppText('')
+              }}
+            >
+              外す
+            </button>
+          )}
+          {oppTaken && <span className="chips-label">その番号はもういます</span>}
+        </form>
+      )}
+
       <div className="row seg" role="group" aria-label="描くもの">
         {MODES.map((m) => (
           <button
@@ -248,7 +326,7 @@ export default function BoardScreen({ players }: Props) {
         {board.shapes.map(drawShape)}
         {preview && <g className="is-preview">{drawShape(preview)}</g>}
 
-        {board.showOpp && OPP_SPOTS.map((_, i) => piece(oppPieceId(i + 1), String(i + 1), true))}
+        {board.showOpp && board.opp.map((o) => piece(o.id, String(o.number), true))}
         {starters.map((id) => piece(id, nameOf.get(id) ?? '?', false))}
       </svg>
 
