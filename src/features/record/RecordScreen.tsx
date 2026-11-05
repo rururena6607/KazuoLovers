@@ -7,6 +7,7 @@ import type {
   SetRecords,
   Side,
 } from '../../contracts/index.ts'
+import { colSplitsOf, type ColSplits } from '../../components/courtGeometry.ts'
 import { playerColorMap } from '../../components/playerColors.ts'
 import { toggleServing } from '../../lib/rally/index.ts'
 import { loadBestOf, saveBestOf, type BestOf } from './bestOf.ts'
@@ -18,6 +19,7 @@ import RallyPanel from './RallyPanel.tsx'
 import { recentServeMarks } from './recentMarks.ts'
 import ReceptionPanel from './ReceptionPanel.tsx'
 import RecordList from './RecordList.tsx'
+import { isScrimmage, notInTeamB, oppLabelOf } from './scrimmage.ts'
 import ScoreButton from './ScoreButton.tsx'
 import {
   autoPoint,
@@ -42,9 +44,14 @@ interface Props {
   /** 次のセットを作る（F-05）。終わったら親が ctx を読み直す */
   onNextSet: () => Promise<void>
   /** 相手の背番号をその場で足す（F-04） */
-  onAddOpp?: (number: number) => Promise<OpponentPlayer>
+  onAddOpp?: (number: number, playerId?: string) => Promise<OpponentPlayer>
   /** 練習モード（F-10）に切り替える。なければボタンを出さない */
   onPractice?: () => void
+  /**
+   * 相手コートの列の境目を保存する（F-24。GameSet の colSplit1・colSplit2）。
+   * なければ、動かした境目はこの画面のあいだだけ残る
+   */
+  onSaveColSplits?: (setId: string, splits: ColSplits) => Promise<void>
 }
 
 /** ラリー中に開いている入力：自チームのアタック・相手のスパイク（F-25）・直前の1本への付け足し。null は閉じている */
@@ -62,7 +69,14 @@ const panelOf = (rec: PlayRecord): Side | null =>
 const canAttach = (rec: PlayRecord): boolean =>
   rec.kind === 'reception' || (rec.kind === 'serve' && rec.result === 'in')
 
-export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractice }: Props) {
+export default function RecordScreen({
+  repo,
+  ctx,
+  onNextSet,
+  onAddOpp,
+  onPractice,
+  onSaveColSplits,
+}: Props) {
   const { match, opponent } = ctx
   const [saveError, setSaveError] = useState<string | null>(null)
   const onError = useCallback((e: unknown) => {
@@ -107,11 +121,32 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
   // 管理画面は試合を作るときに第1セットも作るので、ふつうは空にならない
   const set = ctx.sets[setIndex] ?? ctx.sets[0] ?? { id: '', matchId: match.id, setNo: 1, ourScore: 0, oppScore: 0 }
   const oppName = opponent?.name ?? '相手'
-  /** 選ぶときは今いる選手だけ。表示（一覧・直前の1本）は引退した選手も含める */
-  const activePlayers = ctx.players.filter((p) => p.active)
   const oppPlayers = ctx.opponentPlayers
+  /**
+   * 選ぶときは今いる選手だけ。表示（一覧・直前の1本）は引退した選手も含める。
+   * 紅白戦（F-27）は両チームとも部員から選ぶ。B チームに入った部員は A チーム（自チーム側）の選択肢から外し、
+   * B チームの選手は部員の名前で出す。B チームに足せるのは、まだ B チームにいない部員
+   */
+  const scrimmage = isScrimmage(match)
+  const activePlayers = scrimmage
+    ? notInTeamB(ctx.players.filter((p) => p.active), oppPlayers)
+    : ctx.players.filter((p) => p.active)
+  const oppLabel = scrimmage ? oppLabelOf(ctx.players) : undefined
+  const bCandidates = scrimmage ? activePlayers : undefined
   /** 選手ごとの色（F-22）。引退した選手も含めて決めるので、分析画面と同じ色になる */
   const colors = useMemo(() => playerColorMap(ctx.players), [ctx.players])
+
+  /** 動かした列の境目（セットの id → 境目）。まだ動かしていないセットは GameSet の値か 3 等分（F-24） */
+  const [movedSplits, setMovedSplits] = useState<ReadonlyMap<string, ColSplits>>(new Map())
+  const colSplits = movedSplits.get(set.id) ?? colSplitsOf(set)
+  const moveSplits = (splits: ColSplits) => setMovedSplits((m) => new Map(m).set(set.id, splits))
+  const commitSplits = (splits: ColSplits) => {
+    if (!onSaveColSplits) return
+    onSaveColSplits(set.id, splits).catch((e: unknown) => {
+      console.error(e)
+      setSaveError('列の境目を保存できませんでした。もう一度動かしてください')
+    })
+  }
 
   const records = recordsOf(set.id)
   /** このセットの直前のサーブの着弾点（F-22「記録画面は直前の数本」） */
@@ -409,6 +444,7 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
               setId={set.id}
               players={activePlayers}
               prevReception={prevReceptionOf(lastPlay)}
+              colSplits={colSplits}
               onSave={savePlay}
             />
           </div>
@@ -422,6 +458,8 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
               oppPlayers={oppPlayers}
               onSave={savePlay}
               onAddOpp={onAddOpp}
+              oppLabel={oppLabel}
+              bCandidates={bCandidates}
             />
           </div>
         )}
@@ -434,7 +472,12 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
             onSave={savePlay}
             removed={removed}
             onAddOpp={onAddOpp}
+            oppLabel={oppLabel}
+            bCandidates={bCandidates}
             recentMarks={recentMarks}
+            colSplits={colSplits}
+            onColSplitsChange={moveSplits}
+            onColSplitsCommit={commitSplits}
           />
         </div>
         <div hidden={showList || showRallyInput || shown !== 'opp'}>
@@ -446,6 +489,8 @@ export default function RecordScreen({ repo, ctx, onNextSet, onAddOpp, onPractic
             onSave={savePlay}
             removed={removed}
             onAddOpp={onAddOpp}
+            oppLabel={oppLabel}
+            bCandidates={bCandidates}
           />
         </div>
 

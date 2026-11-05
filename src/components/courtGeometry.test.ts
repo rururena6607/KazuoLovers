@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_COL_SPLITS } from '../contracts/index.ts'
 import {
   COURT_H,
   MARGIN_X,
   MARGIN_Y,
   FULL_NET_Y,
+  MIN_COL_GAP,
+  colSplitsOf,
+  moveColSplit,
   allZones,
   courtToFull,
   fullToCourt,
@@ -86,5 +90,37 @@ describe('fullToCourt / courtToFull（両面のコート図）', () => {
       expect(back.p.x).toBeCloseTo(p.x)
       expect(back.p.y).toBeCloseTo(p.y)
     }
+  })
+})
+
+describe('colSplitsOf / moveColSplit（列の境目 F-24）', () => {
+  it('両方そろっていればセットの値、そろっていなければ既定の 3 等分', () => {
+    expect(colSplitsOf({ colSplit1: 0.25, colSplit2: 0.6 })).toEqual([0.25, 0.6])
+    expect(colSplitsOf({})).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: 0.25 })).toEqual(DEFAULT_COL_SPLITS)
+  })
+  it('0 ≤ 左 < 右 ≤ 1 でなければ既定（lib/court の zoneOf と同じ条件）', () => {
+    expect(colSplitsOf({ colSplit1: 0, colSplit2: 1 })).toEqual([0, 1])
+    expect(colSplitsOf({ colSplit1: 0.6, colSplit2: 0.3 })).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: 0.5, colSplit2: 0.5 })).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: -0.1, colSplit2: 0.5 })).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: 0.3, colSplit2: 1.2 })).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: Number.NaN, colSplit2: 0.5 })).toEqual(DEFAULT_COL_SPLITS)
+  })
+  it('つかんだ点線だけを動かす', () => {
+    expect(moveColSplit([0.3, 0.7], 0, 0.2)).toEqual([0.2, 0.7])
+    expect(moveColSplit([0.3, 0.7], 1, 0.8)).toEqual([0.3, 0.8])
+  })
+  it('もう一方の点線を越えない（colSplit1 < colSplit2）', () => {
+    const [a, b] = moveColSplit([0.3, 0.7], 0, 0.9)
+    expect(a).toBeCloseTo(0.7 - MIN_COL_GAP)
+    expect(b).toBe(0.7)
+    const [c, d] = moveColSplit([0.3, 0.7], 1, 0.1)
+    expect(c).toBe(0.3)
+    expect(d).toBeCloseTo(0.3 + MIN_COL_GAP)
+  })
+  it('サイドラインを越えない（0 ≤ colSplit1、colSplit2 ≤ 1）', () => {
+    expect(moveColSplit([0.3, 0.7], 0, -0.4)[0]).toBe(MIN_COL_GAP)
+    expect(moveColSplit([0.3, 0.7], 1, 1.4)[1]).toBe(1 - MIN_COL_GAP)
   })
 })

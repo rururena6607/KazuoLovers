@@ -130,13 +130,44 @@ export function checkOpponentPlayerNumber(n: number): string | null {
   return isNumber(n) ? null : '背番号は 0〜99 で入れてください。'
 }
 
+/** 紅白戦の B チームの名前。試合ごとに自動で作る（contracts の Match.kind のコメント） */
+export const SCRIMMAGE_TEAM_NAME = '紅白戦（B チーム）'
+
+/**
+ * 相手チームの一覧から、紅白戦の B チームを除く。
+ * B チームは試合ごとに自動で作る内部のものなので、「相手チーム」の一覧や選択肢、「相手」の範囲には出さない。
+ * 除くもの：紅白戦の試合が使っている相手チーム。または、既定の名前（「紅白戦（B チーム）」）で、
+ * ふつうの試合も練習も使っていないもの（試合の作成や削除が途中で止まって残った B チーム）
+ */
+export function withoutScrimmageTeams<T extends { id: string; name: string }>(
+  opponents: readonly T[],
+  matches: readonly { kind: Match['kind']; opponent_id: string | null }[],
+): T[] {
+  const scrimmage = new Set(matches.filter((m) => m.kind === 'scrimmage').map((m) => m.opponent_id))
+  const ordinary = new Set(matches.filter((m) => m.kind !== 'scrimmage').map((m) => m.opponent_id))
+  return opponents.filter((o) => !scrimmage.has(o.id) && !(o.name === SCRIMMAGE_TEAM_NAME && !ordinary.has(o.id)))
+}
+
 export function checkMatch(m: MatchInput): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(m.date)) return '日付を選んでください。'
   if (m.kind === 'practice' && m.opponentId !== null) return '練習には相手を付けません。'
-  if (m.kind === 'scrimmage' && m.opponentId === null) return '紅白戦には B チームを付けてください。'
+  // B チームは作るときに自動で作る（試合ごと）。ふつうの相手チームを紅白戦に付けると、消すときに巻き込む
+  if (m.kind === 'scrimmage' && m.opponentId !== null) return '紅白戦の B チームは自動で作ります（相手を付けません）。'
   if (!Number.isInteger(m.setPoints) || m.setPoints < 1 || m.setPoints > 50) {
     return '1セットの点数は 1〜50 で入れてください。'
   }
+  return null
+}
+
+/** 紅白戦の B チームで、背番号が別の選手と重なったときの理由（本物の teamData とデモで同じ文） */
+export const duplicateNumberMessage = (number: number): string =>
+  `紅白戦の B チームに、背番号 ${number} の選手がすでにいます。ほかの背番号で入れてください。`
+
+/** 列の境目が正しいか。0 ≤ 左 < 右 ≤ 1（contracts の GameSet と DB の check と同じ）。正しくなければ理由を返す */
+export function checkColSplits(colSplit1: number, colSplit2: number): string | null {
+  if (!Number.isFinite(colSplit1) || !Number.isFinite(colSplit2)) return '列の境目の値が正しくありません。'
+  if (colSplit1 < 0 || colSplit2 > 1) return '列の境目は、コートの内側（0〜1）に置いてください。'
+  if (colSplit1 >= colSplit2) return '左の境目は、右の境目より左に置いてください。'
   return null
 }
 
@@ -180,6 +211,9 @@ export function toDataErrorMessage(error: { message: string; code?: string }): s
       return '入れた値が正しくありません。'
     case '42501':
       return 'このチームのデータを変える権限がありません。'
+    case 'PGRST116':
+      // 1 件のはずが 0 件（ないデータ、または権限がなくて見えない）
+      return 'データが見つかりませんでした（ないか、このチームのデータではありません）。'
   }
   if (/fetch|network/i.test(error.message)) {
     return '通信できませんでした。電波のよい場所でもう一度試してください。'

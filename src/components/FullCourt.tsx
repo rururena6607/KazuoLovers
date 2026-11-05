@@ -8,6 +8,7 @@ import {
   courtToFull,
   eventToSvg,
   fullToCourt,
+  type ColSplits,
   type CourtPoint,
 } from './courtGeometry.ts'
 
@@ -28,9 +29,11 @@ interface Props {
   /** 終点（方向・落ちた位置）。null なら描かない */
   to: ArrowEnd | null
   onTap?: (end: ArrowEnd) => void
+  /** 相手コートの列の境目（F-24）。省略時は 3 等分 */
+  colSplits?: ColSplits
 }
 
-export default function FullCourt({ label, from, to, onTap }: Props) {
+export default function FullCourt({ label, from, to, onTap, colSplits }: Props) {
   const markerId = useId()
   const handleClick = (e: MouseEvent<SVGSVGElement>) => {
     if (!onTap) return
@@ -62,7 +65,7 @@ export default function FullCourt({ label, from, to, onTap }: Props) {
           <path d="M 0 0 L 10 5 L 0 10 z" className="court-arrow-head" />
         </marker>
       </defs>
-      <CourtLayer side="opponent" />
+      <CourtLayer side="opponent" colSplits={colSplits} />
       <g transform={`translate(0 ${OWN_OFFSET_Y})`}>
         <CourtLayer side="own" />
       </g>

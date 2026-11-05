@@ -404,6 +404,19 @@ button {
   stroke-width: 0.8;
 }
 
+/* 列の境目の点線をつかむ線（F-24）。見えないが太く、指でつかみやすくする */
+.court-split-handle {
+  stroke: transparent;
+  stroke-width: 8;
+  cursor: ew-resize;
+  pointer-events: stroke;
+  touch-action: none;
+}
+.court.is-dragging .court-zone-line {
+  stroke: var(--selected);
+  stroke-width: 0.8;
+}
+
 /* 両面のコート図（矢印）。縦に長いので、375px で入力欄が画面に収まるよう幅を抑える */
 .court-full {
   max-width: 300px;

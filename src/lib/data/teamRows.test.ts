@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { GameSet, Player } from '../../contracts/index.ts'
 import { DEFAULT_SET_POINTS } from '../../contracts/index.ts'
 import {
+  checkColSplits,
   checkMatch,
   checkOpponentPlayerNumber,
   checkPlayer,
+  duplicateNumberMessage,
   matchFromRow,
   matchToRow,
   nextSetNo,
@@ -14,6 +16,7 @@ import {
   setFromRow,
   sortPlayers,
   toDataErrorMessage,
+  withoutScrimmageTeams,
   type MatchInput,
   type PlayerInput,
 } from './teamRows.ts'
@@ -132,9 +135,36 @@ describe('紅白戦（F-27）', () => {
     expect(matchFromRow(row)).toMatchObject({ kind: 'scrimmage', opponentId: 'o-b' })
   })
 
-  it('B チームがないと、紅白戦は作れない', () => {
-    expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: 'o-b' })).toBeNull()
-    expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: null })).toBe('紅白戦には B チームを付けてください。')
+  it('B チームは作るときに自動で付く。紅白戦にも練習にも、相手は付けられない', () => {
+    expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: null })).toBeNull()
+    expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: 'o1' })).toBe('紅白戦の B チームは自動で作ります（相手を付けません）。')
+    expect(checkMatch({ ...match, kind: 'practice', opponentId: 'o1' })).toBe('練習には相手を付けません。')
+  })
+
+  it('相手チームの一覧から、紅白戦の B チームを除く', () => {
+    const teams = [
+      { id: 'o1', name: '熊本工業' },
+      { id: 'o-b1', name: '紅白戦（B チーム）' },
+      { id: 'o2', name: '八代高専' },
+    ]
+    const matches = [
+      { kind: 'match' as const, opponent_id: 'o1' },
+      { kind: 'scrimmage' as const, opponent_id: 'o-b1' },
+      { kind: 'practice' as const, opponent_id: null },
+    ]
+    expect(withoutScrimmageTeams(teams, matches).map((o) => o.id)).toEqual(['o1', 'o2'])
+    expect(withoutScrimmageTeams(teams, []).map((o) => o.id)).toEqual(['o1', 'o2'])
+  })
+
+  it('途中で止まって残った B チーム（既定の名前で、どの試合も使っていない）も除く。ふつうの試合が使っていれば残す', () => {
+    const teams = [
+      { id: 'orphan', name: '紅白戦（B チーム）' },
+      { id: 'used', name: '紅白戦（B チーム）' },
+      { id: 'other', name: '紅白戦の相手' },
+    ]
+    const matches = [{ kind: 'match' as const, opponent_id: 'used' }]
+    // 名前が同じでも、ふつうの試合が使っているものは、利用者が作った相手チーム。名前が違うものは巻き込まない
+    expect(withoutScrimmageTeams(teams, matches).map((o) => o.id)).toEqual(['used', 'other'])
   })
 
   it('B チームの選手は、対応する自チームの選手（player_id）を持つ。ふつうの相手選手は、これまでと同じ形', () => {
@@ -176,6 +206,23 @@ describe('セットの列の境目（F-24）', () => {
   })
 })
 
+describe('checkColSplits（列の境目の確認）', () => {
+  it('0 ≤ 左 < 右 ≤ 1 なら通す（端の値も含む）', () => {
+    expect(checkColSplits(0.3, 0.7)).toBeNull()
+    expect(checkColSplits(0, 1)).toBeNull()
+    expect(checkColSplits(0.01, 0.02)).toBeNull()
+  })
+
+  it('等しい・逆順・範囲外・数でないものは、理由を返す（DB の check 制約と同じ）', () => {
+    expect(checkColSplits(0.5, 0.5)).toMatch('左の境目')
+    expect(checkColSplits(0.7, 0.3)).toMatch('左の境目')
+    expect(checkColSplits(-0.01, 0.5)).toMatch('0〜1')
+    expect(checkColSplits(0.5, 1.01)).toMatch('0〜1')
+    expect(checkColSplits(Number.NaN, 0.5)).toMatch('正しくありません')
+    expect(checkColSplits(0.2, Number.POSITIVE_INFINITY)).toMatch('正しくありません')
+  })
+})
+
 describe('nextSetNo', () => {
   it('いちばん大きいセットの番号の次。セットがなければ 1、5セットあれば null', () => {
     expect(nextSetNo([])).toBe(1)
@@ -197,5 +244,15 @@ describe('toDataErrorMessage', () => {
       '通信できませんでした。電波のよい場所でもう一度試してください。',
     )
     expect(toDataErrorMessage({ message: 'boom' })).toBe('保存できませんでした（boom）')
+  })
+
+  it('1 件のはずが 0 件（PGRST116）は、英語のまま出さず、日本語にする', () => {
+    expect(toDataErrorMessage({ message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116' })).toBe(
+      'データが見つかりませんでした（ないか、このチームのデータではありません）。',
+    )
+  })
+
+  it('紅白戦の B チームの背番号の重複は、背番号を入れた文にする', () => {
+    expect(duplicateNumberMessage(8)).toBe('紅白戦の B チームに、背番号 8 の選手がすでにいます。ほかの背番号で入れてください。')
   })
 })

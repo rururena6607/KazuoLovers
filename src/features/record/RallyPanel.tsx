@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ColSplits } from '../../components/courtGeometry.ts'
 import FullCourt from '../../components/FullCourt.tsx'
 import type { AttackRecord, Grade, Player } from '../../contracts/index.ts'
 import {
@@ -21,9 +22,11 @@ interface Props {
   /** サーブレシーブからの攻撃なら、そのレシーブの評価 */
   prevReception: Grade | null
   onSave: (rec: AttackRecord) => void
+  /** このセットの相手コートの列の境目（F-24。表示だけ） */
+  colSplits?: ColSplits
 }
 
-export default function RallyPanel({ setId, players, prevReception, onSave }: Props) {
+export default function RallyPanel({ setId, players, prevReception, onSave, colSplits }: Props) {
   const [draft, setDraft] = useState<AttackDraft>(emptyAttackDraft)
   const update = (patch: Partial<AttackDraft>) => setDraft((d) => ({ ...d, ...patch }))
 
@@ -96,6 +99,7 @@ export default function RallyPanel({ setId, players, prevReception, onSave }: Pr
         from={draft.from && { side: 'own', p: draft.from }}
         to={draft.to && { side: 'opponent', p: draft.to }}
         onTap={(end) => setDraft((d) => withArrowTap(d, end.side, end.p))}
+        colSplits={colSplits}
       />
     </div>
   )

@@ -17,8 +17,17 @@ export interface MatchContext {
 
 export interface MatchRepository {
   loadMatch(matchId: string): Promise<MatchContext>
-  /** 試合中にその場で相手の背番号を足す（F-04）。同じ背番号がすでにあれば、それを返す */
-  addOpponentPlayer(opponentId: string, number: number): Promise<OpponentPlayer>
+  /**
+   * 試合中にその場で相手の背番号を足す（F-04）。同じ背番号がすでにあれば、それを返す。
+   * 紅白戦の B チーム**だけ**に、playerId に自チームの選手（部員）を渡す（F-27。ふつうの試合の相手チームには渡さない。DB は同じチームの選手かどうかしか確かめない）：number は B チームでの背番号（ふつうはその部員の背番号）。
+   * その部員がすでに入っていれば、それを返す。number が B チームの別の選手と重なるときは reject する
+   */
+  addOpponentPlayer(opponentId: string, number: number, playerId?: string): Promise<OpponentPlayer>
   /** 次のセットを作る（F-05「セット終了 → 次のセット」）。5セットあれば reject する */
   createNextSet(matchId: string): Promise<GameSet>
+  /**
+   * セットの相手コートの列の境目を保存し、保存したセットを返す（F-24）。
+   * 0 ≤ colSplit1 < colSplit2 ≤ 1。両方そろえて渡す（片方だけは不可）。範囲外なら reject する
+   */
+  updateColSplits(setId: string, colSplit1: number, colSplit2: number): Promise<GameSet>
 }

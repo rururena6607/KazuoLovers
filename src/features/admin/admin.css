@@ -34,6 +34,7 @@
 }
 .admin-list li {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
   padding: 8px 0;
@@ -120,6 +121,11 @@
 .admin-inline input {
   flex: 1;
   min-width: 0;
+}
+.admin .admin-danger {
+  border-color: var(--bad, #c62828);
+  color: var(--bad, #c62828);
+  font-weight: bold;
 }
 .admin .admin-primary {
   background: var(--navy);

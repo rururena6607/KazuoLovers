@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { GameSet, OpponentPlayer } from '../../contracts/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_PRACTICE } from './demo.ts'
-import { createDemoMatchSource, parseOppNumber, withOppPlayer, withSet } from './matchSource.ts'
+import { duplicateNumberMessage } from '../../lib/data/teamRows.ts'
+import {
+  createDemoMatchSource,
+  parseOppNumber,
+  withOppPlayer,
+  withSavedSet,
+  withSet,
+} from './matchSource.ts'
 
 const opp = (n: number): OpponentPlayer => ({ id: `o${n}`, opponentId: 'x', number: n })
 const set = (n: number): GameSet => ({ id: `s${n}`, matchId: 'm', setNo: n, ourScore: 0, oppScore: 0 })
@@ -51,5 +58,43 @@ describe('createDemoMatchSource', () => {
     expect(p.opponent).toBeNull()
     expect(p.sets).toHaveLength(1)
     await expect(src.loadMatch('nope')).rejects.toThrow()
+  })
+})
+
+describe('createDemoMatchSource の列の境目と紅白戦', () => {
+  it('動かした列の境目を保存し、開き直しても残る。正しくない境目は断る', async () => {
+    const src = createDemoMatchSource()
+    const first = (await src.loadMatch(DEMO_MATCH.id)).sets[0]!
+    const saved = await src.updateColSplits(first.id, 0.25, 0.6)
+    expect(saved).toMatchObject({ id: first.id, colSplit1: 0.25, colSplit2: 0.6 })
+    expect((await src.loadMatch(DEMO_MATCH.id)).sets[0]).toMatchObject({ colSplit1: 0.25, colSplit2: 0.6 })
+    await expect(src.updateColSplits(first.id, 0.7, 0.3)).rejects.toThrow()
+    await expect(src.updateColSplits('nothing', 0.3, 0.7)).rejects.toThrow()
+  })
+
+  it('部員（playerId）を渡すと、B チームの選手として足せる（紅白戦。デモでも形は同じ）', async () => {
+    const src = createDemoMatchSource()
+    const added = await src.addOpponentPlayer('o-b', 8, 'p8')
+    expect(added).toMatchObject({ number: 8, playerId: 'p8' })
+    // 渡さなければ、これまでどおり背番号だけ
+    expect(await src.addOpponentPlayer('o-b', 33)).not.toHaveProperty('playerId')
+  })
+
+  it('本物（teamData）と同じ：同じ部員なら返す。別の部員と背番号が重なるなら reject する。B チームごとに分ける', async () => {
+    const src = createDemoMatchSource()
+    const first = await src.addOpponentPlayer('o-b', 8, 'p8')
+    expect((await src.addOpponentPlayer('o-b', 8, 'p8')).id).toBe(first.id)
+    await expect(src.addOpponentPlayer('o-b', 8, 'p9')).rejects.toThrow(duplicateNumberMessage(8))
+    // 別の B チームなら、同じ背番号でも足せる
+    expect(await src.addOpponentPlayer('o-b2', 8, 'p9')).toMatchObject({ opponentId: 'o-b2', number: 8, playerId: 'p9' })
+  })
+})
+
+describe('withSavedSet', () => {
+  it('同じ id のセットだけを、保存したセットに置き換える（F-24 の境目）', () => {
+    const s1: GameSet = { id: 's1', matchId: 'm', setNo: 1, ourScore: 0, oppScore: 0 }
+    const s2: GameSet = { id: 's2', matchId: 'm', setNo: 2, ourScore: 0, oppScore: 0 }
+    const saved: GameSet = { ...s2, colSplit1: 0.25, colSplit2: 0.6 }
+    expect(withSavedSet([s1, s2], saved)).toEqual([s1, saved])
   })
 })
