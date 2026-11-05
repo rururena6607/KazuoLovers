@@ -106,6 +106,8 @@ export const CAUSE_LABELS: Record<PointCause, string> = {
   kill: 'アタック決定',
   attack_error: 'アタックミス',
   blocked: '被ブロック',
+  opp_kill: '相手のアタック決定',
+  opp_attack_error: '相手のアタックミス',
   manual: 'ラリー',
 }
 

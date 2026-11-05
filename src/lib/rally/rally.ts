@@ -64,6 +64,22 @@ export const pointFor: PointFor = (rec) => {
           return unreachable(result)
       }
     }
+    case 'opp_attack': {
+      const result = rec.result
+      switch (result) {
+        case 'killed':
+          return { side: 'opp', cause: 'opp_kill' }
+        case 'opp_error':
+          return { side: 'us', cause: 'opp_attack_error' }
+        case 'A':
+        case 'B':
+        case 'C':
+        case 'D':
+          return null
+        default:
+          return unreachable(result)
+      }
+    }
   }
 }
 

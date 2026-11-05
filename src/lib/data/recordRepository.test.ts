@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AnyRecord, PointRecord, ServeRecord, SetRecords } from '../../contracts/index.ts'
+import type { AnyRecord, OppAttackRecord, PointRecord, ServeRecord, SetRecords } from '../../contracts/index.ts'
 import { createRecordRepository, type RemoteRecordStore } from './recordRepository.ts'
 import { emptySetRecords } from './recordRows.ts'
 
@@ -76,7 +76,39 @@ async function watch(repo: ReturnType<typeof createRecordRepository>, matchId: s
   return { calls, stop, last: () => calls.at(-1) ?? [] }
 }
 
+const oppAttack = (clientId: string): OppAttackRecord => ({
+  kind: 'opp_attack',
+  clientId,
+  setId: 's1',
+  hitterId: null,
+  diggerId: null,
+  fromX: 0.5,
+  fromY: 0.9,
+  toX: 0.3,
+  toY: 0.4,
+  speed: null,
+  result: 'B',
+  recordedAt: '2026-11-05T10:00:01.000Z',
+})
+
 describe('createRecordRepository', () => {
+  it('相手のスパイクも、送れないあいだは画面に出し、消すと画面から外す（黙って捨てない）', async () => {
+    const fake = createFakeRemote({ m1: ['s1'] })
+    const repo = createRecordRepository(fake.remote)
+    const w = await watch(repo, 'm1')
+
+    fake.state.online = false
+    await repo.save(oppAttack('oa1'))
+    expect(w.last()[0]?.oppAttacks?.map((r) => r.clientId)).toEqual(['oa1'])
+    // 同じ clientId は上書きし、増えない
+    await repo.save({ ...oppAttack('oa1'), result: 'killed' })
+    expect(w.last()[0]?.oppAttacks).toHaveLength(1)
+    expect(w.last()[0]?.oppAttacks?.[0]?.result).toBe('killed')
+
+    await repo.remove('oa1')
+    expect(w.last()[0]?.oppAttacks).toEqual([])
+  })
+
   it('保存すると送り、listBySet で読める。同じ clientId は上書きする', async () => {
     const fake = createFakeRemote({ m1: ['s1'] })
     const repo = createRecordRepository(fake.remote)

@@ -135,6 +135,9 @@ export function toRow(rec: AnyRecord): { table: RecordTable; row: RecordRow } {
           recorded_at: rec.recordedAt,
         },
       }
+    case 'opp_attack':
+      // 相手のスパイクの表と保存は、contracts のあとの PR（テーブル・保存と読み込み）で作る。それまでは画面から作られない
+      throw new Error('相手のスパイクの保存はまだ作っていません')
     case 'point':
       return {
         table: TABLES.point,

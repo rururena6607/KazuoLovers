@@ -23,7 +23,7 @@ export function createFakeRecordRepository(
   let online = true
 
   const collect = (setId: string): SetRecords => {
-    const out: SetRecords = { setId, serves: [], receptions: [], attacks: [], points: [] }
+    const out: SetRecords = { setId, serves: [], receptions: [], attacks: [], oppAttacks: [], points: [] }
     for (const rec of saved.values()) {
       if (rec.setId !== setId) continue
       switch (rec.kind) {
@@ -36,6 +36,9 @@ export function createFakeRecordRepository(
         case 'attack':
           out.attacks.push(rec)
           break
+        case 'opp_attack':
+          out.oppAttacks?.push(rec)
+          break
         case 'point':
           out.points.push(rec)
           break
@@ -46,6 +49,7 @@ export function createFakeRecordRepository(
     out.serves.sort(byTime)
     out.receptions.sort(byTime)
     out.attacks.sort(byTime)
+    out.oppAttacks?.sort(byTime)
     out.points.sort(byTime)
     return out
   }

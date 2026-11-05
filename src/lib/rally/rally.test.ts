@@ -5,6 +5,8 @@ import {
   type AttackRecord,
   type AttackResult,
   type Grade,
+  type OppAttackRecord,
+  type OppAttackResult,
   type RallyState,
   type ReceptionRecord,
   type ReceptionResult,
@@ -180,5 +182,34 @@ describe('isSetOver・setWinner', () => {
   })
   it('0-0 は終わっていない', () => {
     expect(setWinner(state(0, 0, 'us'), DEFAULT_SET_POINTS)).toBeNull()
+  })
+})
+
+describe('pointFor：相手のスパイク（opp_attack）', () => {
+  const oppAttack = (result: OppAttackResult): OppAttackRecord => ({
+    kind: 'opp_attack',
+    clientId: 'oa1',
+    setId: 's1',
+    hitterId: null,
+    diggerId: null,
+    fromX: null,
+    fromY: null,
+    toX: null,
+    toY: null,
+    speed: null,
+    result,
+    recordedAt: '2026-11-05T00:00:00Z',
+  })
+
+  it('拾えず相手の得点：相手に +1（opp_kill）', () => {
+    expect(pointFor(oppAttack('killed'))).toEqual({ side: 'opp', cause: 'opp_kill' })
+  })
+
+  it('相手のアタックミス：自チームに +1（opp_attack_error）', () => {
+    expect(pointFor(oppAttack('opp_error'))).toEqual({ side: 'us', cause: 'opp_attack_error' })
+  })
+
+  it('拾えた（A〜D）：ラリーが続くので null', () => {
+    for (const g of ['A', 'B', 'C', 'D'] as const) expect(pointFor(oppAttack(g))).toBeNull()
   })
 })
