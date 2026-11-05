@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PlayRecord, RecordRepository, SetRecords, Side } from '../../contracts/index.ts'
-import { revertPoint, toggleServing } from '../../lib/rally/index.ts'
+import { toggleServing } from '../../lib/rally/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_OPP_PLAYERS, DEMO_PLAYERS, DEMO_SETS } from './demo.ts'
 import { describeEntry, entriesOf, idsToRemove, relinkAttacks, type Entry } from './history.ts'
 import { newIds } from './ids.ts'
@@ -132,7 +132,7 @@ export default function RecordScreen({ repo, onPractice }: Props) {
     removeIds(ids)
     // −1 ではサーブ権を変えない
     const rest = points.filter((p) => !ids.includes(p.clientId)).length
-    setOverride({ setId: set.id, serving: revertPoint(state, side).serving, atPoints: rest })
+    setOverride({ setId: set.id, serving: state.serving, atPoints: rest })
   }
 
   const entries = entriesOf(records)
