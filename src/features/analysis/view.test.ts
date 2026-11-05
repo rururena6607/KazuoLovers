@@ -593,6 +593,13 @@ describe('紅白戦：Bチームの部員（5 章「紅白戦の個人成績」�
     const row = t.rows.find((x) => x.id === 'p7')
     expect(row?.cells.map((c) => c.text)).toEqual(['1', '25.0%*', '0.0%*', '0.0%*'])
   })
+  it('サーブの種類別の表には、種類が空の B のサーブを入れない（「その他」に混ぜない）', () => {
+    const parts = splitPractice(recordsInScope({ kind: 'practice' }, sc), sc)
+    // A の p3 のフローター 1 本 ＋ B の p7 の 1 本（種類が空）。種類別の表はフローターの行だけ
+    expect(serveTypeTable(parts.scrimmageForTypes).rows.map((r) => r.id)).toEqual(['float'])
+    // 全体と選手別の表には、種類が空の本数も入る
+    expect(parts.scrimmage.find((x) => x.setId === 's5')?.serves).toHaveLength(2)
+  })
   it('opponentPlayers がなければ、Aの記録のまま', () => {
     const none = { ...sc, opponentPlayers: undefined }
     const { scrimmage } = splitPractice(recordsInScope({ kind: 'practice' }, none), none)

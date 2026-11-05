@@ -115,12 +115,15 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
 export function splitPractice(
   sets: readonly SetRecords[],
   data: AnalysisData,
-): { scrimmage: SetRecords[]; drill: SetRecords[] } {
+): { scrimmage: SetRecords[]; scrimmageForTypes: SetRecords[]; drill: SetRecords[] } {
   const matchById = new Map(data.matches.map((m) => [m.id, m]))
   const kindOfSet = new Map(data.gameSets.map((gs) => [gs.id, matchById.get(gs.matchId)?.kind]))
   const members = oppPlayerMapOf(data.opponentPlayers ?? [])
+  const scrimmageSets = sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage')
   return {
-    scrimmage: sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage').map((r) => withBTeam(r, members)),
+    scrimmage: scrimmageSets.map((r) => withBTeam(r, members)),
+    // サーブの種類別の表用。Bのサーブは種類が記録された本数だけ（空の本数を「その他」に混ぜない）
+    scrimmageForTypes: scrimmageSets.map((r) => withBTeam(r, members, true)),
     drill: sets.filter((r) => kindOfSet.get(r.setId) === 'practice'),
   }
 }
@@ -129,11 +132,15 @@ export function splitPractice(
  * 紅白戦の記録に、Bチームの成績を足す（5 章「紅白戦の個人成績」）。Bの記録は、Aの記録を裏返したものを
  * 「その部員の記録」の形に読み替えて足す（lib/stats の bTeamServes など）。部員が分かる本数だけが入る
  */
-function withBTeam(r: SetRecords, members: ReturnType<typeof oppPlayerMapOf>): SetRecords {
+function withBTeam(
+  r: SetRecords,
+  members: ReturnType<typeof oppPlayerMapOf>,
+  knownTypeOnly = false,
+): SetRecords {
   if (members.size === 0) return r
   return {
     ...r,
-    serves: [...r.serves, ...bTeamServes(r.receptions, members)],
+    serves: [...r.serves, ...bTeamServes(r.receptions, members, { knownTypeOnly })],
     receptions: [...r.receptions, ...bTeamReceptions(r.serves, members)],
     attacks: [...r.attacks, ...bTeamAttacks(r.oppAttacks ?? [], members)],
   }

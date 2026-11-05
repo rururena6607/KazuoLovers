@@ -134,7 +134,7 @@ export function AnalysisScreen({
       heat: tab === 'attack' ? null : heatmap(tab, matchLike),
       course: tab === 'attack' ? null : courseHeatmap(tab, matchLike),
       dig: tab === 'reception' ? digView(matchLike) : null,
-      types: tab === 'serve' ? serveTypeTable(matchLike) : null,
+      types: tab === 'serve' ? serveTypeTable(parts ? parts.scrimmageForTypes : matchLike) : null,
       // 紅白戦のアタックは、Bチームに被ブロックの記録がないので、速さ別の表も効果率と失点を除く
       speed: ((t) => (t && parts && tab === 'attack' ? attackTableForScrimmage(t) : t))(speedTable(tab, matchLike)),
       players:

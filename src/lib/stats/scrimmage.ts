@@ -25,15 +25,21 @@ export function oppPlayerMapOf(
   return map
 }
 
-/** Bチームのサーブ。被エース＝Bのエース、A〜D＝イン（受けた評価つき）、相手ミス＝Bのミス */
+/**
+ * Bチームのサーブ。被エース＝Bのエース、A〜D＝イン（受けた評価つき）、相手ミス＝Bのミス。
+ * 相手サーブの種類は任意で、空のときは ServeRecord の形に合わせて 'other' を入れる。そのため、サーブの種類別の表には
+ * knownTypeOnly で種類が記録された本数だけを渡す（空の本数を「その他」に混ぜない。扱いは未決：PR #73）
+ */
 export function bTeamServes(
   receptions: readonly ReceptionRecord[],
   members: OppPlayerMap,
+  options: { knownTypeOnly?: boolean } = {},
 ): ServeRecord[] {
   const out: ServeRecord[] = []
   for (const r of receptions) {
     const serverId = r.oppServerId === null ? undefined : members.get(r.oppServerId)
     if (serverId === undefined) continue
+    if (options.knownTypeOnly === true && r.oppServeType === null) continue
     out.push({
       kind: 'serve',
       clientId: `${r.clientId}:b`,
