@@ -3,7 +3,10 @@ import {
   COURT_H,
   MARGIN_X,
   MARGIN_Y,
+  FULL_NET_Y,
   allZones,
+  courtToFull,
+  fullToCourt,
   courtToSvg,
   svgToCourt,
   zoneColor,
@@ -57,5 +60,31 @@ describe('zoneColor', () => {
   it('1〜6 以外は文字の色', () => {
     expect(zoneColor(0)).toBe('var(--ink)')
     expect(zoneColor(7)).toBe('var(--ink)')
+  })
+})
+
+describe('fullToCourt / courtToFull（両面のコート図）', () => {
+  it('ネットの線より上は相手コート、下は自コート。どちらもネットが y=0', () => {
+    const above = fullToCourt({ x: MARGIN_X, y: FULL_NET_Y - 1 })
+    expect(above.side).toBe('opponent')
+    expect(above.p.y).toBeGreaterThan(0)
+    const at = fullToCourt({ x: MARGIN_X, y: FULL_NET_Y })
+    expect(at).toEqual({ side: 'own', p: { x: 0, y: 0 } })
+  })
+
+  it('上の端は相手コートの奥（y=1）、下の端は自コートの奥（y=1）', () => {
+    expect(fullToCourt({ x: MARGIN_X, y: MARGIN_Y }).p).toEqual({ x: 0, y: 1 })
+    const bottom = fullToCourt({ x: MARGIN_X, y: MARGIN_Y + 2 * COURT_H })
+    expect(bottom).toEqual({ side: 'own', p: { x: 0, y: 1 } })
+  })
+
+  it('courtToFull の逆になっている', () => {
+    for (const side of ['opponent', 'own'] as const) {
+      const p = { x: 0.25, y: 0.7 }
+      const back = fullToCourt(courtToFull(side, p))
+      expect(back.side).toBe(side)
+      expect(back.p.x).toBeCloseTo(p.x)
+      expect(back.p.y).toBeCloseTo(p.y)
+    }
   })
 })

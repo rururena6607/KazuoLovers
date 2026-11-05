@@ -43,6 +43,30 @@ export default function Court({ side, marks = [], highlightZone = null, onTap, l
     if (pt) onTap(svgToCourt(side, pt))
   }
 
+  return (
+    <svg
+      className="court"
+      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+      role="img"
+      aria-label={label}
+      onClick={handleClick}
+    >
+      <CourtLayer side={side} marks={marks} highlightZone={highlightZone} />
+    </svg>
+  )
+}
+
+interface LayerProps {
+  side: CourtSide
+  marks?: readonly CourtMark[]
+  highlightZone?: number | null
+}
+
+/**
+ * 片面のコート（床・ゾーン・線・ネット・印）。座標は viewBox 0 0 VIEW_W VIEW_H のまま描くので、
+ * 両面のコート図（FullCourt）では <g transform> でずらして重ねる
+ */
+export function CourtLayer({ side, marks = [], highlightZone = null }: LayerProps) {
   const netY = side === 'opponent' ? MARGIN_Y + COURT_H : MARGIN_Y
   const attackY = courtToSvg(side, { x: 0, y: ATTACK_LINE_Y }).y
 
@@ -62,13 +86,7 @@ export default function Court({ side, marks = [], highlightZone = null, onTap, l
   const highlight = highlightZone === null ? null : zoneRect(highlightZone)
 
   return (
-    <svg
-      className="court"
-      viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-      role="img"
-      aria-label={label}
-      onClick={handleClick}
-    >
+    <>
       <rect x={MARGIN_X} y={MARGIN_Y} width={COURT_W} height={COURT_H} className="court-floor" />
       {/* ゾーンごとに色を塗り、ひと目でどのエリアかわかるようにする（部活フィードバック） */}
       {allZones(side).map((z) => {
@@ -117,6 +135,6 @@ export default function Court({ side, marks = [], highlightZone = null, onTap, l
           </g>
         )
       })}
-    </svg>
+    </>
   )
 }
