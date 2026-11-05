@@ -24,9 +24,11 @@ import {
   opponentPlayerFromRow,
   playerFromRow,
   playerToRow,
+  SCRIMMAGE_TEAM_NAME,
   setFromRow,
   sortPlayers,
   toDataErrorMessage,
+  withoutScrimmageTeams,
   type MatchInput,
   type MatchRow,
   type OpponentPlayerRow,
@@ -57,6 +59,7 @@ export interface TeamData {
   listPlayers(teamId: string): Promise<Player[]>
   /** id があれば直し、なければ作る */
   savePlayer(teamId: string, input: PlayerInput): Promise<Player>
+  /** 相手チーム。紅白戦の B チーム（試合ごとに自動で作るもの）は含まない */
   listOpponents(teamId: string): Promise<Opponent[]>
   createOpponent(teamId: string, name: string): Promise<Opponent>
   listOpponentPlayers(opponentId: string): Promise<OpponentPlayer[]>
@@ -67,8 +70,16 @@ export interface TeamData {
   addOpponentPlayer(opponentId: string, number: number, playerId?: string): Promise<OpponentPlayer>
   /** 日付の新しい順 */
   listMatches(teamId: string): Promise<Match[]>
-  /** 試合を作り、第1セットも作る */
+  /**
+   * 試合を作り、第1セットも作る。
+   * 紅白戦（kind: 'scrimmage'）は、opponentId が null なら B チーム（「紅白戦（B チーム）」）を自動で作って付ける
+   */
   createMatch(teamId: string, input: MatchInput): Promise<{ match: Match; firstSet: GameSet }>
+  /**
+   * 試合・練習・紅白戦を消す。セット・記録（サーブ・レシーブ・アタック・相手のスパイク・得点）もいっしょに消える。
+   * 紅白戦は、ほかの試合が使っていなければ B チームも消す
+   */
+  deleteMatch(matchId: string): Promise<void>
   listSets(matchId: string): Promise<GameSet[]>
   /** 次のセットを作る（F-05）。上限（5セット）なら reject する */
   createNextSet(matchId: string): Promise<GameSet>
@@ -166,14 +177,22 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
       return playerFromRow(check(res))
     },
     async listOpponents(teamId) {
-      return check(
-        await db()
+      const [rows, scrimmages] = await Promise.all([
+        db()
           .from('opponents')
           .select(COLUMNS.opponents)
           .eq('team_id', teamId)
           .order('name')
           .returns<OpponentRow[]>(),
-      ).map(opponentFromRow)
+        db()
+          .from('matches')
+          .select('opponent_id')
+          .eq('team_id', teamId)
+          .eq('kind', 'scrimmage')
+          .returns<{ opponent_id: string | null }[]>(),
+      ])
+      const opponents = check(rows).map(opponentFromRow)
+      return withoutScrimmageTeams(opponents, check(scrimmages).map((m) => m.opponent_id))
     },
     async createOpponent(teamId, name) {
       const opponentName = name.trim()
@@ -238,17 +257,61 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
     },
     async createMatch(teamId, input) {
       fail(checkMatch(input))
-      const match = matchFromRow(
-        check(
+      // 紅白戦の B チームは、試合ごとに自動で作る（使い回すと、顔ぶれが変わったとき選手の対応がずれる）
+      let createdTeamId: string | null = null
+      let opponentId = input.opponentId
+      if (input.kind === 'scrimmage' && opponentId === null) {
+        const team = check(
           await db()
-            .from('matches')
-            .insert(matchToRow(teamId, input))
-            .select(COLUMNS.matches)
-            .single<MatchRow>(),
-        ),
-      )
+            .from('opponents')
+            .insert({ team_id: teamId, name: SCRIMMAGE_TEAM_NAME })
+            .select(COLUMNS.opponents)
+            .single<OpponentRow>(),
+        )
+        createdTeamId = team.id
+        opponentId = team.id
+      }
+      let match: Match
+      try {
+        match = matchFromRow(
+          check(
+            await db()
+              .from('matches')
+              .insert(matchToRow(teamId, { ...input, opponentId }))
+              .select(COLUMNS.matches)
+              .single<MatchRow>(),
+          ),
+        )
+      } catch (e) {
+        // 試合を作れなかったら、さっき作った B チームを残さない
+        if (createdTeamId) await db().from('opponents').delete().eq('id', createdTeamId)
+        throw e
+      }
       // 第1セットを作れなくても、試合は残る。記録画面で開くときに createNextSet で作り直せる
       return { match, firstSet: await insertSet(match.id, 1) }
+    },
+    async deleteMatch(matchId) {
+      const match = check(
+        await db()
+          .from('matches')
+          .select('id,kind,opponent_id')
+          .eq('id', matchId)
+          .single<{ id: string; kind: Match['kind']; opponent_id: string | null }>(),
+      )
+      // 消せたかを確かめるため、消した行を返してもらう（権限がなければ 0 件になる）
+      const deleted = check(
+        await db().from('matches').delete().eq('id', matchId).select('id').returns<{ id: string }[]>(),
+      )
+      fail(deleted.length === 0 ? '削除できませんでした（試合が見つからないか、権限がありません）。' : null)
+      if (match.kind !== 'scrimmage' || match.opponent_id === null) return
+      // 紅白戦の B チームは、ほかの試合が使っていなければいっしょに消す（B チームの選手も消える）
+      const rest = check(
+        await db().from('matches').select('id').eq('opponent_id', match.opponent_id).returns<{ id: string }[]>(),
+      )
+      if (rest.length === 0) {
+        const { error } = await db().from('opponents').delete().eq('id', match.opponent_id)
+        if (error) throw new Error(toDataErrorMessage(error))
+      }
     },
     listSets,
     async createNextSet(matchId) {

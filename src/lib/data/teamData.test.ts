@@ -9,7 +9,7 @@ type Err = { message: string; code?: string }
 
 interface Call {
   table: string
-  op: 'select' | 'insert' | 'update' | 'upsert'
+  op: 'select' | 'insert' | 'update' | 'upsert' | 'delete'
   onConflict?: string
   payload?: Row
   filters: [string, unknown][]
@@ -19,7 +19,7 @@ interface Call {
  * teamData が使う呼び方（from → select / insert / update → eq → single か、そのまま待つ）だけを持つ偽のクライアント。
  * (opponent_id, number) の一意制約も真似る
  */
-function fakeClient(tables: Record<string, Row[]>) {
+function fakeClient(tables: Record<string, Row[]>, failInsert: readonly string[] = []) {
   const calls: Call[] = []
   const client = {
     from(table: string) {
@@ -34,9 +34,25 @@ function fakeClient(tables: Record<string, Row[]>) {
           if (same) return { data: [same], error: null }
           call.op = 'insert'
         }
+        if (call.op === 'delete') {
+          const rows = matching()
+          tables[table] = (tables[table] ?? []).filter((r) => !rows.includes(r))
+          return { data: rows, error: null }
+        }
+        if (call.op === 'insert' && failInsert.includes(table)) {
+          return { data: null, error: { message: 'insert failed', code: '23514' } }
+        }
         if (call.op === 'insert') {
           // 本物の DB は、入れなかった列を null で返す
-          const row: Row = { ...(table === 'opponent_players' ? { player_id: null } : {}), ...call.payload }
+          const defaults: Row =
+            table === 'opponent_players'
+              ? { player_id: null }
+              : table === 'sets'
+                ? { our_score: 0, opp_score: 0, col_split_1: null, col_split_2: null }
+                : table === 'matches'
+                  ? { date: '2026-11-05', tournament: null, set_points: 25, kind: 'match', opponent_id: null }
+                  : {}
+          const row: Row = { ...defaults, ...call.payload }
           const dup = table === 'opponent_players' &&
             tables[table]?.some((r) => r.opponent_id === row.opponent_id && r.number === row.number)
           if (dup) return { data: null, error: { message: 'duplicate key', code: '23505' } }
@@ -53,6 +69,8 @@ function fakeClient(tables: Record<string, Row[]>) {
         insert: (payload: Row) => ((call.op = 'insert'), (call.payload = payload), builder),
         upsert: (payload: Row, opts?: { onConflict?: string }) =>
           ((call.op = 'upsert'), (call.payload = payload), (call.onConflict = opts?.onConflict), builder),
+        delete: () => ((call.op = 'delete'), builder),
+        order: () => builder,
         update: (payload: Row) => ((call.op = 'update'), (call.payload = payload), builder),
         eq: (k: string, v: unknown) => (call.filters.push([k, v]), builder),
         returns: () => builder,
@@ -142,5 +160,111 @@ describe('addOpponentPlayer（F-04・F-27）', () => {
     const { client, calls } = fakeClient({ players: players(), opponent_players: [] })
     await expect(createSupabaseTeamData(() => client).addOpponentPlayer('o-b', 100, 'p8')).rejects.toThrow('0〜99')
     expect(calls).toHaveLength(0)
+  })
+})
+
+const matchInput = { date: '2026-11-05', tournament: null, setPoints: 25 }
+
+describe('紅白戦の作成（F-27）', () => {
+  it('B チームを自動で作って、試合に付ける。第1セットも作る', async () => {
+    const tables: Record<string, Row[]> = { opponents: [], matches: [], sets: [] }
+    const { client } = fakeClient(tables)
+    const { match, firstSet } = await createSupabaseTeamData(() => client).createMatch('t1', {
+      ...matchInput,
+      kind: 'scrimmage',
+      opponentId: null,
+    })
+    expect(tables.opponents).toHaveLength(1)
+    expect(tables.opponents?.[0]).toMatchObject({ team_id: 't1', name: '紅白戦（B チーム）' })
+    expect(match).toMatchObject({ kind: 'scrimmage', opponentId: tables.opponents?.[0]?.id })
+    expect(firstSet).toMatchObject({ matchId: match.id, setNo: 1 })
+  })
+
+  it('紅白戦を 2 回作ると、B チームも 2 つ（試合ごと。使い回さない）', async () => {
+    const tables: Record<string, Row[]> = { opponents: [], matches: [], sets: [] }
+    const data = createSupabaseTeamData(() => fakeClient(tables).client)
+    const a = await data.createMatch('t1', { ...matchInput, kind: 'scrimmage', opponentId: null })
+    const b = await data.createMatch('t1', { ...matchInput, kind: 'scrimmage', opponentId: null })
+    expect(a.match.opponentId).not.toBe(b.match.opponentId)
+    expect(tables.opponents).toHaveLength(2)
+  })
+
+  it('ふつうの試合・練習では、B チームを作らない', async () => {
+    const tables: Record<string, Row[]> = { opponents: [], matches: [], sets: [] }
+    const data = createSupabaseTeamData(() => fakeClient(tables).client)
+    await data.createMatch('t1', { ...matchInput, kind: 'match', opponentId: 'o1' })
+    await data.createMatch('t1', { ...matchInput, kind: 'practice', opponentId: null })
+    expect(tables.opponents).toHaveLength(0)
+  })
+
+  it('試合を作れなかったら、さっき作った B チームを残さない', async () => {
+    const tables: Record<string, Row[]> = { opponents: [], matches: [], sets: [] }
+    const { client } = fakeClient(tables, ['matches'])
+    await expect(
+      createSupabaseTeamData(() => client).createMatch('t1', { ...matchInput, kind: 'scrimmage', opponentId: null }),
+    ).rejects.toThrow()
+    expect(tables.opponents).toHaveLength(0)
+  })
+
+  it('相手チームの一覧に、紅白戦の B チームは出さない', async () => {
+    const tables: Record<string, Row[]> = {
+      opponents: [
+        { id: 'o1', team_id: 't1', name: '熊本工業' },
+        { id: 'o-b', team_id: 't1', name: '紅白戦（B チーム）' },
+      ],
+      matches: [
+        { id: 'm1', team_id: 't1', kind: 'match', opponent_id: 'o1' },
+        { id: 'm2', team_id: 't1', kind: 'scrimmage', opponent_id: 'o-b' },
+      ],
+    }
+    const list = await createSupabaseTeamData(() => fakeClient(tables).client).listOpponents('t1')
+    expect(list.map((o) => o.name)).toEqual(['熊本工業'])
+  })
+})
+
+describe('deleteMatch（試合・練習・紅白戦の削除）', () => {
+  const base = (): Record<string, Row[]> => ({
+    opponents: [
+      { id: 'o1', team_id: 't1', name: '熊本工業' },
+      { id: 'o-b', team_id: 't1', name: '紅白戦（B チーム）' },
+    ],
+    matches: [
+      { id: 'm-match', kind: 'match', opponent_id: 'o1' },
+      { id: 'm-prac', kind: 'practice', opponent_id: null },
+      { id: 'm-scrim', kind: 'scrimmage', opponent_id: 'o-b' },
+    ],
+  })
+
+  it('試合を消す。相手チームは残す（ほかの試合でも使う）', async () => {
+    const tables = base()
+    await createSupabaseTeamData(() => fakeClient(tables).client).deleteMatch('m-match')
+    expect(tables.matches?.map((m) => m.id)).toEqual(['m-prac', 'm-scrim'])
+    expect(tables.opponents).toHaveLength(2)
+  })
+
+  it('練習を消す', async () => {
+    const tables = base()
+    await createSupabaseTeamData(() => fakeClient(tables).client).deleteMatch('m-prac')
+    expect(tables.matches?.map((m) => m.id)).toEqual(['m-match', 'm-scrim'])
+  })
+
+  it('紅白戦を消すと、B チームもいっしょに消す', async () => {
+    const tables = base()
+    await createSupabaseTeamData(() => fakeClient(tables).client).deleteMatch('m-scrim')
+    expect(tables.matches?.map((m) => m.id)).toEqual(['m-match', 'm-prac'])
+    expect(tables.opponents?.map((o) => o.id)).toEqual(['o1'])
+  })
+
+  it('B チームをほかの試合が使っていれば、B チームは残す', async () => {
+    const tables = base()
+    tables.matches?.push({ id: 'm-scrim2', kind: 'scrimmage', opponent_id: 'o-b' })
+    await createSupabaseTeamData(() => fakeClient(tables).client).deleteMatch('m-scrim')
+    expect(tables.opponents?.map((o) => o.id)).toContain('o-b')
+  })
+
+  it('ない試合（または権限のない試合）は、消したことにしない', async () => {
+    const tables = base()
+    await expect(createSupabaseTeamData(() => fakeClient(tables).client).deleteMatch('nothing')).rejects.toThrow()
+    expect(tables.matches).toHaveLength(3)
   })
 })

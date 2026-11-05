@@ -130,10 +130,24 @@ export function checkOpponentPlayerNumber(n: number): string | null {
   return isNumber(n) ? null : '背番号は 0〜99 で入れてください。'
 }
 
+/** 紅白戦の B チームの名前。試合ごとに自動で作る（contracts の Match.kind のコメント） */
+export const SCRIMMAGE_TEAM_NAME = '紅白戦（B チーム）'
+
+/**
+ * 相手チームの一覧から、紅白戦の B チームを除く。
+ * B チームは試合ごとに作る内部のものなので、「相手チーム」の一覧や選択肢、「相手」の範囲には出さない
+ */
+export function withoutScrimmageTeams<T extends { id: string }>(
+  opponents: readonly T[],
+  scrimmageOpponentIds: readonly (string | null)[],
+): T[] {
+  const hidden = new Set(scrimmageOpponentIds)
+  return opponents.filter((o) => !hidden.has(o.id))
+}
+
 export function checkMatch(m: MatchInput): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(m.date)) return '日付を選んでください。'
   if (m.kind === 'practice' && m.opponentId !== null) return '練習には相手を付けません。'
-  if (m.kind === 'scrimmage' && m.opponentId === null) return '紅白戦には B チームを付けてください。'
   if (!Number.isInteger(m.setPoints) || m.setPoints < 1 || m.setPoints > 50) {
     return '1セットの点数は 1〜50 で入れてください。'
   }

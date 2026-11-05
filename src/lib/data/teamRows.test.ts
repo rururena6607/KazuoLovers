@@ -15,6 +15,7 @@ import {
   setFromRow,
   sortPlayers,
   toDataErrorMessage,
+  withoutScrimmageTeams,
   type MatchInput,
   type PlayerInput,
 } from './teamRows.ts'
@@ -133,9 +134,16 @@ describe('紅白戦（F-27）', () => {
     expect(matchFromRow(row)).toMatchObject({ kind: 'scrimmage', opponentId: 'o-b' })
   })
 
-  it('B チームがないと、紅白戦は作れない', () => {
+  it('B チームは作るときに自動で付くので、相手がなくても確かめを通す。練習は相手を付けられない（これまでどおり）', () => {
     expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: 'o-b' })).toBeNull()
-    expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: null })).toBe('紅白戦には B チームを付けてください。')
+    expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: null })).toBeNull()
+    expect(checkMatch({ ...match, kind: 'practice', opponentId: 'o1' })).toBe('練習には相手を付けません。')
+  })
+
+  it('相手チームの一覧から、紅白戦の B チームを除く', () => {
+    const teams = [{ id: 'o1' }, { id: 'o-b1' }, { id: 'o2' }, { id: 'o-b2' }]
+    expect(withoutScrimmageTeams(teams, ['o-b1', null, 'o-b2'])).toEqual([{ id: 'o1' }, { id: 'o2' }])
+    expect(withoutScrimmageTeams(teams, [])).toEqual(teams)
   })
 
   it('B チームの選手は、対応する自チームの選手（player_id）を持つ。ふつうの相手選手は、これまでと同じ形', () => {
