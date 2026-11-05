@@ -111,6 +111,12 @@ export function describeEntry(
         entry.isBack ? 'バックアタック' : 'アタック',
         ATTACK_RESULTS.find((r) => r.value === entry.result)?.label ?? null,
       )
+    case 'opp_attack': {
+      const hitter = opp(entry.hitterId)
+      const digger = own(entry.diggerId)
+      const label = entry.result === 'killed' ? '拾えず' : entry.result === 'opp_error' ? '相手ミス' : entry.result
+      return join(hitter ? `${hitter} → 相手スパイク` : '相手スパイク', digger, label)
+    }
     case 'point':
       // 途中の得点を消すと記録したときの得点はずれるので、点数は出さない
       return `+1 ${entry.side === 'us' ? '自チーム' : '相手'}`

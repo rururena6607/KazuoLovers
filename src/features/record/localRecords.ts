@@ -15,6 +15,8 @@ const listOf = (s: SetRecords, rec: AnyRecord): AnyRecord[] => {
       return s.receptions
     case 'attack':
       return s.attacks
+    case 'opp_attack':
+      return s.oppAttacks ?? []
     case 'point':
       return s.points
   }

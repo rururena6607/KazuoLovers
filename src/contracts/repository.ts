@@ -1,12 +1,21 @@
 // 記録の保存と読み込み。画面はこのインターフェースだけを使い、Supabase を直接呼ばない。
 // 本物は lib/data（ひろし、T-14・T-15）。画面を作るあいだは createFakeRecordRepository を使う。
-import type { AnyRecord, AttackRecord, PointRecord, ReceptionRecord, ServeRecord } from './records.ts'
+import type {
+  AnyRecord,
+  AttackRecord,
+  OppAttackRecord,
+  PointRecord,
+  ReceptionRecord,
+  ServeRecord,
+} from './records.ts'
 
 export interface SetRecords {
   setId: string
   serves: ServeRecord[]
   receptions: ReceptionRecord[]
   attacks: AttackRecord[]
+  /** 相手のスパイクと自チームのレシーブ。古いデータ・フェイクでは未設定のことがある */
+  oppAttacks?: OppAttackRecord[]
   points: PointRecord[]
 }
 
