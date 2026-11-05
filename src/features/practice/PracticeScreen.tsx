@@ -10,7 +10,7 @@ import {
 } from '../../contracts/index.ts'
 import { zoneOf } from '../../lib/court/index.ts'
 import { newIds } from '../record/ids.ts'
-import { SERVE_TYPES, playerLabel, toggle } from '../record/labels.ts'
+import { SERVE_TYPES, toggle } from '../record/labels.ts'
 import { useMatchRecords } from '../record/useMatchRecords.ts'
 import { practiceSummary } from './summary.ts'
 
@@ -114,7 +114,7 @@ export default function PracticeScreen({ repo, ctx, onExit, exitLabel = '試合�
           <button
             key={p.id}
             type="button"
-            className="btn chip"
+            className="btn chip chip-name"
             aria-pressed={playerId === p.id}
             onClick={() => {
               if (p.id === playerId) return
@@ -122,7 +122,9 @@ export default function PracticeScreen({ repo, ctx, onExit, exitLabel = '試合�
               setServeType(p.serveType)
             }}
           >
-            {playerLabel(p)}
+            {/* 練習では背番号を使わないので、名前を大きく出す。背番号は小さく添える */}
+            <span className="chip-name-main">{p.name}</span>
+            <span className="chip-name-sub num">{p.number}</span>
           </button>
         ))}
       </div>
