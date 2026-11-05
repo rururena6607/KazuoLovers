@@ -1,0 +1,154 @@
+/* 作戦ボード（F-23）。色は theme.css の変数を使い、ダークモードにも合わせる。 */
+.board {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+}
+.board-title {
+  margin: 0;
+  font-size: 18px;
+}
+.board-add {
+  display: flex;
+  gap: 4px;
+}
+.board-add input {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 8px;
+  border: var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.board-add input.num {
+  flex: 0 0 5.5em;
+}
+.board-add input:not(.num) {
+  flex: 1 1 0;
+}
+.board-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.board-tools > .btn {
+  flex: 1 1 auto;
+  min-height: 40px;
+}
+.board-actions {
+  display: flex;
+  gap: 4px;
+}
+.board-actions > .btn {
+  flex: 1 1 0;
+}
+.board-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--mute);
+}
+
+/* コート図。ドラッグ中に画面がスクロールしないよう、タッチの操作を横取りする */
+.board-court {
+  display: block;
+  width: 100%;
+  height: min(68dvh, 640px);
+  border: var(--border);
+  background: var(--surface);
+  touch-action: none;
+  user-select: none;
+}
+.board-court[data-tool='erase'] {
+  cursor: pointer;
+}
+.board-court[data-tool='arrow'],
+.board-court[data-tool='defend'],
+.board-court[data-tool='attack'] {
+  cursor: crosshair;
+}
+.board-floor {
+  fill: var(--bg);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.board-attack-line {
+  stroke: var(--line-soft);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.board-net {
+  stroke: var(--line);
+  stroke-width: 3;
+}
+.board-side {
+  fill: var(--mute);
+  font-size: 9px;
+}
+
+/* 守る範囲は破線と「守」、打つ範囲は実線と「打」。色だけで見分けなくてよいようにする */
+.board-area {
+  stroke-width: 1.5;
+}
+.board-area-defend {
+  fill: var(--zone-5);
+  fill-opacity: 0.18;
+  stroke: var(--zone-5);
+  stroke-dasharray: 5 3;
+}
+.board-area-attack {
+  fill: var(--zone-2);
+  fill-opacity: 0.18;
+  stroke: var(--zone-2);
+}
+.board-area-label {
+  fill: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.board-arrow {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+  fill: none;
+}
+.board-arrowhead {
+  fill: var(--ink);
+}
+.board-hit {
+  stroke: transparent;
+  stroke-width: 16;
+}
+.board-draft {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* 駒。選択中の色（--selected）で塗り、背番号を中に書く */
+.board-piece {
+  cursor: grab;
+}
+.board-piece[data-dragging] {
+  cursor: grabbing;
+}
+.board-piece-dot {
+  fill: var(--selected);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+.board-piece-number {
+  fill: var(--on-selected);
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.board-piece-name {
+  fill: var(--ink);
+  font-size: 10px;
+  text-anchor: middle;
+  pointer-events: none;
+}

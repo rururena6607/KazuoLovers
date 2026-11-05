@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { AdminScreen } from '../features/admin/AdminScreen.tsx'
 import { AuthGate } from '../features/auth/AuthGate.tsx'
+import BoardScreen from '../features/board/BoardScreen.tsx'
 import { DEMO_MATCH, DEMO_PRACTICE } from '../features/record/demo.ts'
 import RecordTab from '../features/record/RecordTab.tsx'
 import AnalysisTab from './AnalysisTab.tsx'
@@ -72,6 +73,8 @@ export function Shell({ b }: { b: Backend }) {
       />
     ),
     admin: b.kind === 'demo' ? <DemoAdmin /> : <AdminScreen data={b.teamData} onOpenMatch={openMatch} />,
+    // 作戦ボードはサーバーを使わず端末の中だけで動く（F-23）
+    board: <BoardScreen />,
   }
 
   // 入力途中の状態を残すため、画面は描いたまま選択中以外を hidden で隠す
