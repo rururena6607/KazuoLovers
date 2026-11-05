@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PlayRecord, RecordRepository, SetRecords, Side } from '../../contracts/index.ts'
-import { revertPoint, toggleServing } from '../../lib/rally/index.ts'
+import { toggleServing } from '../../lib/rally/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_OPP_PLAYERS, DEMO_PLAYERS, DEMO_SETS } from './demo.ts'
 import { newIds } from './ids.ts'
 import ReceptionPanel from './ReceptionPanel.tsx'
@@ -88,11 +88,13 @@ export default function RecordScreen({ repo }: Props) {
     // 付け足し（同じ clientId の上書き）では得点を足さない（−1 で消した得点が戻らないように）
     if (!isNew) return
     const pt = autoPoint(rec, state, points, newIds())
-    if (pt) save(pt)
+    // セットが終わったあとは得点を足さない（26-23 を作らない。lib/rally の applyPointInSet と同じ考え）
+    if (pt && !winner) save(pt)
     setView(null)
   }
 
   const plus = (side: Side) => {
+    if (winner) return
     setSaveError(null)
     save(makePoint(state, side, 'manual', null, { ...newIds(), setId: set.id }))
     setView(null)
@@ -102,7 +104,7 @@ export default function RecordScreen({ repo }: Props) {
     const pt = lastPointOf(points, side)
     if (!pt) return
     // −1 ではサーブ権を変えない
-    setOverride({ setId: set.id, serving: revertPoint(state, side).serving, atPoints: points.length - 1 })
+    setOverride({ setId: set.id, serving: state.serving, atPoints: points.length - 1 })
     remove(pt.clientId)
   }
 
