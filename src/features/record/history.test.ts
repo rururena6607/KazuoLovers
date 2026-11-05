@@ -99,6 +99,11 @@ describe('describeEntry', () => {
     expect(d(reception({ result: 'ace' }))).toBe('受 #12 被エース')
     expect(d(reception({ result: 'opp_miss', receiverId: null }))).toBe('相手ミス')
   })
+  it('アタック', () => {
+    expect(d(attack({ attackType: 'back', isBack: true, result: 'blocked' }))).toBe(
+      '#7 バックアタック 被ブロック',
+    )
+  })
   it('手動の得点（点数は出さない）', () => {
     expect(d(point({ side: 'opp', ourScore: 3, oppScore: 5 }))).toBe('+1 相手')
   })

@@ -4,6 +4,8 @@ import { revertPoint, toggleServing } from '../../lib/rally/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_OPP_PLAYERS, DEMO_PLAYERS, DEMO_SETS } from './demo.ts'
 import { describeEntry, entriesOf, idsToRemove, relinkAttacks, type Entry } from './history.ts'
 import { newIds } from './ids.ts'
+import { prevReceptionOf } from './attack.ts'
+import RallyPanel from './RallyPanel.tsx'
 import ReceptionPanel from './ReceptionPanel.tsx'
 import RecordList from './RecordList.tsx'
 import ScoreButton from './ScoreButton.tsx'
@@ -61,6 +63,8 @@ export default function RecordScreen({ repo, onPractice }: Props) {
   const [showList, setShowList] = useState(false)
   /** 取消・削除した clientId。入力欄の「直前の1本」が消えたら付け足しをやめる */
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set())
+  /** ラリー中に出す入力：アタック（T-40）か、直前のサーブ・レシーブへの付け足し */
+  const [rallyTab, setRallyTab] = useState<'attack' | 'serve'>('attack')
 
   const recordsOf = (setId: string) => sets.find((s) => s.setId === setId)
   // いまのセットは記録から決める（記録がある最後のセット）。画面を開き直しても第1セットに戻らない
@@ -86,17 +90,22 @@ export default function RecordScreen({ repo, onPractice }: Props) {
   const matchOver = matchWinner(winners, totalSets) !== null
   const lastPlay = records ? latestOf<PlayRecord>(records.serves, records.receptions, records.attacks) : null
   const shown = view ?? state.serving
+  const rally = inRally(lastPlay, points)
+  const showAttack = rally && rallyTab === 'attack' && !showList
 
   const savePlay = (rec: PlayRecord) => {
     setSaveError(null)
     const isNew = !plays.some((p) => p.clientId === rec.clientId)
     save(rec)
-    setLastSaved(rec)
+    if (rec.kind !== 'attack') setLastSaved(rec)
     // 付け足し（同じ clientId の上書き）では得点を足さない（−1 で消した得点が戻らないように）
     if (!isNew) return
+    // state・plays は保存した記録を通知を待たずに重ねたもの（useMatchRecords）なので、続けて押しても古くならない
     const pt = autoPoint(rec, state, points, newIds())
     if (pt) save(pt)
     setView(null)
+    // 新しいサーブ・レシーブのあとにラリーになったら、まずアタックの入力を出す
+    if (rec.kind !== 'attack') setRallyTab('attack')
   }
 
   const plus = (side: Side) => {
@@ -233,11 +242,32 @@ export default function RecordScreen({ repo, onPractice }: Props) {
         </button>
       </div>
 
-      {inRally(lastPlay, points) && (
-        <p className="rally-hint">ラリー中：得点したチームの数字をタップ</p>
+      {rally && !showList && (
+        <>
+          <p className="rally-hint">ラリー中：アタックを記録するか、得点したチームの数字をタップ</p>
+          <div className="row seg" role="group" aria-label="ラリー中の入力">
+            <button
+              type="button"
+              className="btn btn-sm"
+              aria-pressed={rallyTab === 'attack'}
+              onClick={() => setRallyTab('attack')}
+            >
+              アタック
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              aria-pressed={rallyTab === 'serve'}
+              onClick={() => setRallyTab('serve')}
+            >
+              {shown === 'us' ? 'サーブ' : 'レシーブ'}（付け足し）
+            </button>
+          </div>
+        </>
       )}
 
       {!showList &&
+        !showAttack &&
         (view !== null ? (
           <div className="row">
             <button type="button" className="btn btn-sm" onClick={() => setView(null)}>
@@ -266,8 +296,19 @@ export default function RecordScreen({ repo, onPractice }: Props) {
         />
       )}
 
-      {/* 入力欄はどちらも描いたまま隠し、一覧を開いても入力途中の内容と直前の1本を残す */}
-      <div hidden={showList || shown !== 'us'}>
+      {/* 入力欄はどれも描いたまま隠し、一覧や付け足しに切り替えても入力途中の内容と直前の1本を残す */}
+      {rally && (
+        <div hidden={!showAttack}>
+          <RallyPanel
+            key={set.id}
+            setId={set.id}
+            players={DEMO_PLAYERS}
+            prevReception={prevReceptionOf(lastPlay)}
+            onSave={savePlay}
+          />
+        </div>
+      )}
+      <div hidden={showList || showAttack || shown !== 'us'}>
         <ServePanel
           key={set.id}
           setId={set.id}
@@ -277,7 +318,7 @@ export default function RecordScreen({ repo, onPractice }: Props) {
           removed={removed}
         />
       </div>
-      <div hidden={showList || shown !== 'opp'}>
+      <div hidden={showList || showAttack || shown !== 'opp'}>
         <ReceptionPanel
           key={set.id}
           setId={set.id}
