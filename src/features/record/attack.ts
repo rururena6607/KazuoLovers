@@ -90,8 +90,9 @@ export function buildAttack(
 
 /**
  * ラリー中に、いまどちらが攻撃する番か（T-36 部活フィードバック）。
- * 自チームのレシーブのあとは自チームが打つ番。自チームのサーブ・アタック（継続）のあとは
- * 相手が打ってくる番なので、アタックの入力を最初から出さない（「こっちのスパイク？」と迷わせない）。
+ * 自チームのレシーブ・相手のスパイクを拾ったあと（A〜D。ラリーが続くのはこのときだけ）は自チームが打つ番。
+ * 自チームのサーブ・アタック（継続）のあとは相手が打ってくる番なので、アタックの入力を最初から出さない
+ * （「こっちのスパイク？」と迷わせない）。
  */
 export const rallyTurnOf = (lastPlay: PlayRecord | null): 'us' | 'opp' =>
-  lastPlay?.kind === 'reception' ? 'us' : 'opp'
+  lastPlay?.kind === 'reception' || lastPlay?.kind === 'opp_attack' ? 'us' : 'opp'

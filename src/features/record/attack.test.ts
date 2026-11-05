@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AttackRecord, ReceptionRecord, ServeRecord } from '../../contracts/index.ts'
+import type { AttackRecord, OppAttackRecord, ReceptionRecord, ServeRecord } from '../../contracts/index.ts'
 import {
   buildAttack,
   emptyAttackDraft,
@@ -147,6 +147,24 @@ describe('rallyTurnOf（T-36 部活フィードバック）', () => {
     }
     expect(rallyTurnOf(cont)).toBe('opp')
     expect(rallyTurnOf(null)).toBe('opp')
+  })
+  it('相手のスパイクを拾ったあと（A〜D）は自チームが打つ番（F-25）', () => {
+    const dug: OppAttackRecord = {
+      kind: 'opp_attack',
+      clientId: 'd0',
+      setId: 's1',
+      hitterId: null,
+      diggerId: 'p7',
+      fromX: null,
+      fromY: null,
+      toX: null,
+      toY: null,
+      speed: null,
+      result: 'B',
+      recordedAt: t(3),
+    }
+    expect(rallyTurnOf(dug)).toBe('us')
+    expect(prevReceptionOf(dug)).toBeNull()
   })
 })
 
