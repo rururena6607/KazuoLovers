@@ -99,6 +99,14 @@ describe('colSplitsOf / moveColSplit（列の境目 F-24）', () => {
     expect(colSplitsOf({})).toEqual(DEFAULT_COL_SPLITS)
     expect(colSplitsOf({ colSplit1: 0.25 })).toEqual(DEFAULT_COL_SPLITS)
   })
+  it('0 ≤ 左 < 右 ≤ 1 でなければ既定（lib/court の zoneOf と同じ条件）', () => {
+    expect(colSplitsOf({ colSplit1: 0, colSplit2: 1 })).toEqual([0, 1])
+    expect(colSplitsOf({ colSplit1: 0.6, colSplit2: 0.3 })).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: 0.5, colSplit2: 0.5 })).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: -0.1, colSplit2: 0.5 })).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: 0.3, colSplit2: 1.2 })).toEqual(DEFAULT_COL_SPLITS)
+    expect(colSplitsOf({ colSplit1: Number.NaN, colSplit2: 0.5 })).toEqual(DEFAULT_COL_SPLITS)
+  })
   it('つかんだ点線だけを動かす', () => {
     expect(moveColSplit([0.3, 0.7], 0, 0.2)).toEqual([0.2, 0.7])
     expect(moveColSplit([0.3, 0.7], 1, 0.8)).toEqual([0.3, 0.8])

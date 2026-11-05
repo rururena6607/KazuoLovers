@@ -87,11 +87,15 @@ export type ColSplits = readonly [number, number]
  */
 export const MIN_COL_GAP = 0.05
 
-/** セットの境目。両方そろっていなければ既定（3 等分。config の DEFAULT_COL_SPLITS） */
-export const colSplitsOf = (set: { colSplit1?: number; colSplit2?: number }): ColSplits =>
-  set.colSplit1 !== undefined && set.colSplit2 !== undefined
-    ? [set.colSplit1, set.colSplit2]
-    : DEFAULT_COL_SPLITS
+/**
+ * セットの境目。両方そろっていない・0 ≤ 左 < 右 ≤ 1 でないときは既定（3 等分。config の DEFAULT_COL_SPLITS）。
+ * lib/court の zoneOf・zoneBounds（T-50）も同じ条件で 3 等分に戻すので、点線とゾーンの色が食い違わない
+ */
+export const colSplitsOf = (set: { colSplit1?: number; colSplit2?: number }): ColSplits => {
+  const { colSplit1: a, colSplit2: b } = set
+  // NaN は比べると false になるので、ここで落ちる
+  return a !== undefined && b !== undefined && a >= 0 && a < b && b <= 1 ? [a, b] : DEFAULT_COL_SPLITS
+}
 
 /** 点線を x へ動かす。index は 0＝左の点線、1＝右の点線。もう一方の点線とサイドラインを越えない */
 export function moveColSplit(splits: ColSplits, index: 0 | 1, x: number): ColSplits {

@@ -70,9 +70,16 @@ export default function Court({
     if (pt) onTap(svgToCourt(side, pt))
   }
 
+  /**
+   * ドラッグ中の最新の境目。props の colSplits は再描画のあとでしか新しくならないので、
+   * すばやく離しても最後の位置を保存できるよう、ここに持つ
+   */
+  const latest = useRef<ColSplits>(colSplits)
+
   const grab = (index: 0 | 1) => (e: PointerEvent<SVGLineElement>) => {
     e.stopPropagation()
     justDragged.current = false
+    latest.current = colSplits
     e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId)
     setDragging(index)
   }
@@ -81,10 +88,12 @@ export default function Court({
     const pt = eventToSvg(e)
     if (!pt) return
     justDragged.current = true
-    onColSplitsChange(moveColSplit(colSplits, dragging, svgToCourt(side, pt).x))
+    latest.current = moveColSplit(latest.current, dragging, svgToCourt(side, pt).x)
+    onColSplitsChange(latest.current)
   }
   const release = () => {
-    if (dragging !== null) onColSplitsCommit?.(colSplits)
+    // 点線をタップしただけ（動かしていない）なら保存しない。保存は DB への書き込みと、ほかの端末への通知になる
+    if (dragging !== null && justDragged.current) onColSplitsCommit?.(latest.current)
     setDragging(null)
   }
 
