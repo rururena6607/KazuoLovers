@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Court from '../../components/Court.tsx'
 import type { OpponentPlayer, Player, ServeRecord } from '../../contracts/index.ts'
+import AddOppNumber from './AddOppNumber.tsx'
 import EndlinePicker from './EndlinePicker.tsx'
 import { newIds } from './ids.ts'
 import { GRADES, MISS_TYPES, SERVE_TYPES, playerLabel, toggle } from './labels.ts'
@@ -24,9 +25,11 @@ interface Props {
   onSave: (rec: ServeRecord) => void
   /** 取消・削除した clientId。直前の1本が消えたら付け足しをやめる */
   removed: ReadonlySet<string>
+  /** 相手の背番号をその場で足す（F-04）。足せないときは undefined */
+  onAddOpp?: (number: number) => Promise<OpponentPlayer>
 }
 
-export default function ServePanel({ setId, players, oppPlayers, onSave, removed }: Props) {
+export default function ServePanel({ setId, players, oppPlayers, onSave, removed, onAddOpp }: Props) {
   const [draft, setDraft] = useState<ServeDraft>(emptyDraft)
   const [pickingMiss, setPickingMiss] = useState(false)
   /** 受けた相手をあとから付け足せる直前の1本。次の1本の入力を始めたら null */
@@ -174,6 +177,7 @@ export default function ServePanel({ setId, players, oppPlayers, onSave, removed
             {o.number}
           </button>
         ))}
+        <AddOppNumber onAdd={onAddOpp} onAdded={(p) => selectReceiver(p.id)} />
       </div>
     </div>
   )

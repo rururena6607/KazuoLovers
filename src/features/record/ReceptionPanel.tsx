@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Court from '../../components/Court.tsx'
 import type { OpponentPlayer, Player, ReceptionRecord } from '../../contracts/index.ts'
+import AddOppNumber from './AddOppNumber.tsx'
 import { newIds } from './ids.ts'
 import { GRADES, SERVE_TYPES, playerLabel, toggle } from './labels.ts'
 import {
@@ -24,6 +25,8 @@ interface Props {
   onSave: (rec: ReceptionRecord) => void
   /** 取消・削除した clientId。直前の1本が消えたら付け足しをやめる */
   removed: ReadonlySet<string>
+  /** 相手の背番号をその場で足す（F-04）。足せないときは undefined */
+  onAddOpp?: (number: number) => Promise<OpponentPlayer>
 }
 
 const OUTCOMES: readonly { value: ReceptionOutcome; label: string }[] = [
@@ -31,7 +34,14 @@ const OUTCOMES: readonly { value: ReceptionOutcome; label: string }[] = [
   ...GRADES.map((g) => ({ value: g, label: g })),
 ]
 
-export default function ReceptionPanel({ setId, players, oppPlayers, onSave, removed }: Props) {
+export default function ReceptionPanel({
+  setId,
+  players,
+  oppPlayers,
+  onSave,
+  removed,
+  onAddOpp,
+}: Props) {
   const [draft, setDraft] = useState<ReceptionDraft>(emptyReceptionDraft)
   /** 直前の1本。次の1本の入力を始めたら null */
   const [saved, setLast] = useState<ReceptionRecord | null>(null)
@@ -149,6 +159,7 @@ export default function ReceptionPanel({ setId, players, oppPlayers, onSave, rem
             {o.number}
           </button>
         ))}
+        <AddOppNumber onAdd={onAddOpp} onAdded={(p) => setOptional({ oppServerId: p.id })} />
       </div>
       <div className="row" role="group" aria-label="相手のサーブの種類（任意）">
         {SERVE_TYPES.map((t) => (
