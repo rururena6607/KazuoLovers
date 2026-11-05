@@ -127,3 +127,29 @@ describe('AnalysisScreen：試合とセット', () => {
     expect(html).not.toContain('得点の推移')
   })
 })
+
+describe('AnalysisScreen の AI コメント（T-32）', () => {
+  const aiReports = {
+    request: () => Promise.reject(new Error('使わない')),
+    latest: () => Promise.resolve(null),
+  }
+
+  it('ai を渡したときだけ、AI コメントの欄を出す', () => {
+    expect(renderToString(<AnalysisScreen data={data} />)).not.toContain('AIコメント')
+    const html = renderToString(<AnalysisScreen data={data} ai={{ teamId: 't', aiReports }} />)
+    expect(html).toContain('AIに分析してもらう')
+  })
+
+  it('練習の範囲では、ボタンを出さない', () => {
+    const practice: AnalysisData = {
+      ...data,
+      matches: [{ ...data.matches[0]!, id: 'mp', kind: 'practice', opponentId: null }],
+      gameSets: [{ id: 's1', matchId: 'mp', setNo: 1, ourScore: 0, oppScore: 0 }],
+    }
+    const html = renderToString(
+      <AnalysisScreen data={practice} initialScope={{ kind: 'practice' }} ai={{ teamId: 't', aiReports }} />,
+    )
+    expect(html).toContain('練習はAIコメントの対象外です')
+    expect(html).not.toContain('AIに分析してもらう')
+  })
+})

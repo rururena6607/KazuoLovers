@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { MIN_SAMPLE } from '../../contracts/index.ts'
+import type { AiReports } from '../../lib/data/aiReport.ts'
 import './analysis.css'
+import { AiCommentPanel } from './AiCommentPanel.tsx'
 import { Heatmap } from './Heatmap.tsx'
 import { ScoreTrend, SetResults } from './SetResults.tsx'
 import { MetricRow, StatTable } from './StatTable.tsx'
@@ -71,8 +73,11 @@ function targetOf(scope: Scope | undefined): string {
 export function AnalysisScreen({
   data,
   initialScope,
+  ai,
 }: {
   data: AnalysisData
+  /** AI コメント（T-32）。渡さなければ出さない。aiReports は lib/data のもの（テストでは偽物）を src/app から渡す */
+  ai?: { teamId: string; aiReports: AiReports }
   /** 最初に開く範囲。試合の結果画面から開くときは `{ kind: 'match', matchId }` を渡す */
   initialScope?: Scope
 }) {
@@ -92,6 +97,8 @@ export function AnalysisScreen({
     const scope = toScope(kind, target)
     return scope ? recordsInScope(scope, data) : []
   }, [kind, target, data])
+
+  const aiScope = useMemo(() => toScope(kind, target), [kind, target])
 
   // セット別の結果の行をタップしたら、そのセットの分析に移る
   const openSet = (setId: string) => {
@@ -188,6 +195,8 @@ export function AnalysisScreen({
           <p className="an-note">{referenceNote}</p>
         </>
       )}
+
+      {ai && <AiCommentPanel teamId={ai.teamId} scope={aiScope} data={data} aiReports={ai.aiReports} />}
     </div>
   )
 }
