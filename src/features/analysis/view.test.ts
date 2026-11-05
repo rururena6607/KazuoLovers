@@ -19,6 +19,7 @@ import {
   scopeOptions,
   serveTypeTable,
   speedTable,
+  splitPractice,
   type AnalysisData,
 } from './view.ts'
 
@@ -437,5 +438,38 @@ describe('speedTable（速さ別。5 章：全体指標と同じ式、速さな�
   it('速さを入れた記録がない・レシーブは null', () => {
     expect(speedTable('serve', [{ ...empty('s1'), serves: [serve()] }])).toBeNull()
     expect(speedTable('reception', [empty('s1')])).toBeNull()
+  })
+})
+
+describe('範囲「練習」と紅白戦（5 章「紅白戦の個人成績」）', () => {
+  // 試合 m1（s1）、練習 pr（s4）、紅白戦 sc（s5）
+  const withScrimmage: AnalysisData = {
+    ...data,
+    matches: [...data.matches, match('sc', { kind: 'scrimmage', opponentId: 'b1' })],
+    gameSets: [...data.gameSets, gameSet('s5', 'sc', 1)],
+    records: [...data.records, empty('s5')],
+  }
+  const ids = (scope: Parameters<typeof recordsInScope>[0]) =>
+    recordsInScope(scope, withScrimmage).map((r) => r.setId)
+
+  it('練習の範囲には、サーブ練習と紅白戦の両方が入る', () => {
+    expect(ids({ kind: 'practice' })).toEqual(['s4', 's5'])
+  })
+  it('試合の全体・相手・試合には、紅白戦を入れない', () => {
+    expect(ids({ kind: 'all' })).toEqual(['s1', 's2', 's3'])
+    expect(ids({ kind: 'opponent', opponentId: 'b1' })).toEqual([])
+  })
+  it('紅白戦の相手（Bチーム）は、相手の選択肢に出ない', () => {
+    const opts = scopeOptions('opponent', {
+      ...withScrimmage,
+      opponents: [...opponents, { id: 'b1', teamId: 't', name: '紅白戦（B チーム）' }],
+    })
+    expect(opts.map((o) => o.value)).not.toContain('b1')
+  })
+  it('splitPractice：紅白戦とサーブ練習に分ける（サーブ練習の指標に紅白戦のサーブを混ぜない）', () => {
+    const sets = recordsInScope({ kind: 'practice' }, withScrimmage)
+    const { scrimmage, drill } = splitPractice(sets, withScrimmage)
+    expect(scrimmage.map((r) => r.setId)).toEqual(['s5'])
+    expect(drill.map((r) => r.setId)).toEqual(['s4'])
   })
 })

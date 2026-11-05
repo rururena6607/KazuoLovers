@@ -43,8 +43,8 @@ export interface AnalysisData {
 }
 
 /**
- * 範囲の選択。all は試合（kind = match）すべて、practice は練習（kind = practice）すべて。
- * 練習は公式の指標と物差しが違うので、全体には混ぜない。
+ * 範囲の選択。all は試合（kind = match）すべて、practice は練習（kind = practice）と紅白戦（kind = scrimmage）すべて。
+ * 練習と紅白戦は公式の指標と物差しが違うので、試合の全体・相手には混ぜない（要件定義書 5 章「紅白戦の個人成績」）。
  */
 export type Scope =
   | { kind: 'all' }
@@ -83,7 +83,7 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
       case 'all':
         return match.kind === 'match'
       case 'practice':
-        return match.kind === 'practice'
+        return match.kind === 'practice' || match.kind === 'scrimmage'
       case 'match':
         return match.id === scope.matchId
       case 'set':
@@ -94,6 +94,29 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
   }
   return data.records.filter((r) => inScope(r.setId))
 }
+
+/**
+ * 範囲「練習」の記録を、紅白戦とサーブ練習に分ける（5 章）。紅白戦は試合と同じ指標で、サーブ練習は成功率・ゾーン的中率で出す。
+ * 紅白戦のサーブには狙ったゾーンがなく、結果が ace／in／miss なので、サーブ練習の指標には混ぜない
+ */
+export function splitPractice(
+  sets: readonly SetRecords[],
+  data: AnalysisData,
+): { scrimmage: SetRecords[]; drill: SetRecords[] } {
+  const matchById = new Map(data.matches.map((m) => [m.id, m]))
+  const kindOfSet = new Map(data.gameSets.map((gs) => [gs.id, matchById.get(gs.matchId)?.kind]))
+  return {
+    scrimmage: sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage'),
+    drill: sets.filter((r) => kindOfSet.get(r.setId) === 'practice'),
+  }
+}
+
+/**
+ * 紅白戦の画面の注。数え方が未決のBチームの成績は、まだ出していない（要件定義書 12 章「紅白戦の読み替えの規則」）。
+ * 試合の選手別表と同じく、自チームのAの記録（サーブ・サーブレシーブ・アタック）で、その部員の成績を出す
+ */
+export const SCRIMMAGE_NOTE =
+  '紅白戦は、Aチーム側（自チームとして記録した分）の記録で集計しています。Bチームに入った部員のBチームとしての成績は、数え方が決まっていないため、まだ含めていません。'
 
 // ---- 表示用の値 ----
 
