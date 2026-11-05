@@ -2,6 +2,7 @@ import { useState } from 'react'
 import FullCourt from '../../components/FullCourt.tsx'
 import type { OppAttackRecord, OppAttackResult, OpponentPlayer, Player } from '../../contracts/index.ts'
 import AddOppNumber from './AddOppNumber.tsx'
+import { numberLabel } from './scrimmage.ts'
 import { DIG_RESULTS, buildDig, emptyDigDraft, withDigArrowTap, type DigDraft } from './dig.ts'
 import { newIds } from './ids.ts'
 import { playerLabel, toggle } from './labels.ts'
@@ -17,10 +18,22 @@ interface Props {
   oppPlayers: readonly OpponentPlayer[]
   onSave: (rec: OppAttackRecord) => void
   /** 相手の背番号をその場で足す（F-04）。足せないときは undefined */
-  onAddOpp?: (number: number) => Promise<OpponentPlayer>
+  onAddOpp?: (number: number, playerId?: string) => Promise<OpponentPlayer>
+  /** 相手の選手のボタンの文字（紅白戦の B チームは部員の名前。F-27）。省略時は背番号 */
+  oppLabel?: (o: OpponentPlayer) => string
+  /** 紅白戦のとき、B チームに足せる部員（F-27） */
+  bCandidates?: readonly Player[]
 }
 
-export default function DigPanel({ setId, players, oppPlayers, onSave, onAddOpp }: Props) {
+export default function DigPanel({
+  setId,
+  players,
+  oppPlayers,
+  onSave,
+  onAddOpp,
+  oppLabel = numberLabel,
+  bCandidates,
+}: Props) {
   const [draft, setDraft] = useState<DigDraft>(emptyDigDraft)
   const update = (patch: Partial<DigDraft>) => setDraft((d) => ({ ...d, ...patch }))
 
@@ -67,14 +80,14 @@ export default function DigPanel({ setId, players, oppPlayers, onSave, onAddOpp 
           <button
             key={o.id}
             type="button"
-            className="btn chip num"
+            className={o.playerId ? 'btn chip' : 'btn chip num'}
             aria-pressed={draft.hitterId === o.id}
             onClick={() => update({ hitterId: toggle(draft.hitterId, o.id) })}
           >
-            {o.number}
+            {oppLabel(o)}
           </button>
         ))}
-        <AddOppNumber onAdd={onAddOpp} onAdded={(p) => update({ hitterId: p.id })} />
+        <AddOppNumber onAdd={onAddOpp} candidates={bCandidates} onAdded={(p) => update({ hitterId: p.id })} />
       </div>
 
       <p className="court-hint">矢印（任意）：相手コートで打った位置、自コートで落ちた位置・拾った位置をタップ</p>

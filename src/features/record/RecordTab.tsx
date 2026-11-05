@@ -107,8 +107,9 @@ export default function RecordTab({
 
   const opponent = ctx.opponent
   const onAddOpp = opponent
-    ? (n: number) =>
-        source.addOpponentPlayer(opponent.id, n).then((p) => {
+    ? // 紅白戦の B チームには playerId（部員）も渡す（F-27、#63）
+      (n: number, playerId?: string) =>
+        source.addOpponentPlayer(opponent.id, n, playerId).then((p) => {
           update((c) => ({ ...c, opponentPlayers: withOppPlayer(c.opponentPlayers, p) }))
           return p
         })

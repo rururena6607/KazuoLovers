@@ -1,17 +1,21 @@
 import { useState, type FormEvent } from 'react'
-import type { OpponentPlayer } from '../../contracts/index.ts'
+import type { OpponentPlayer, Player } from '../../contracts/index.ts'
+import { playerLabel } from './labels.ts'
 import { parseOppNumber } from './matchSource.ts'
 
 // 相手の背番号を試合中にその場で足す（F-04）。「＋」を押すと番号の入力が出る。
-// 足した背番号は親（記録のタブ）が一覧に入れ、onAdded で選んだ状態にする。
+// 紅白戦（F-27）では番号を打たず、B チームに入れる部員を選ぶ（candidates）。
+// 足した選手は親（記録のタブ）が一覧に入れ、onAdded で選んだ状態にする。
 
 interface Props {
-  /** 足せないとき（練習・デモの相手なし）は undefined */
-  onAdd?: (number: number) => Promise<OpponentPlayer>
+  /** 足せないとき（練習・デモの相手なし）は undefined。紅白戦では playerId（部員）も渡す */
+  onAdd?: (number: number, playerId?: string) => Promise<OpponentPlayer>
   onAdded: (player: OpponentPlayer) => void
+  /** 紅白戦のとき、B チームに足せる部員（まだ B チームにいない部員）。ふつうの試合は undefined */
+  candidates?: readonly Player[]
 }
 
-export default function AddOppNumber({ onAdd, onAdded }: Props) {
+export default function AddOppNumber({ onAdd, onAdded, candidates }: Props) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -21,12 +25,11 @@ export default function AddOppNumber({ onAdd, onAdded }: Props) {
 
   const value = parseOppNumber(text)
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
-    if (value === null || busy) return
+  const add = (number: number, playerId?: string) => {
+    if (busy) return
     setBusy(true)
     setError(null)
-    onAdd(value)
+    onAdd(number, playerId)
       .then((p) => {
         onAdded(p)
         setText('')
@@ -39,16 +42,44 @@ export default function AddOppNumber({ onAdd, onAdded }: Props) {
       .finally(() => setBusy(false))
   }
 
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    if (value !== null) add(value)
+  }
+
   if (!open) {
     return (
       <button
         type="button"
         className="btn chip"
-        aria-label="相手の背番号を足す"
+        aria-label={candidates ? 'B チームに部員を足す' : '相手の背番号を足す'}
         onClick={() => setOpen(true)}
       >
         ＋
       </button>
+    )
+  }
+
+  const errorText = error && (
+    <span className="error" role="alert">
+      {error}
+    </span>
+  )
+
+  if (candidates) {
+    return (
+      <div className="add-opp" role="group" aria-label="B チームに入れる部員">
+        {candidates.map((p) => (
+          <button key={p.id} type="button" className="btn btn-sm" disabled={busy} onClick={() => add(p.number, p.id)}>
+            {playerLabel(p)}
+          </button>
+        ))}
+        {candidates.length === 0 && <span className="chips-label">足せる部員がいません</span>}
+        <button type="button" className="btn btn-sm" onClick={() => setOpen(false)}>
+          やめる
+        </button>
+        {errorText}
+      </div>
     )
   }
 
@@ -70,11 +101,7 @@ export default function AddOppNumber({ onAdd, onAdded }: Props) {
       <button type="button" className="btn btn-sm" onClick={() => setOpen(false)}>
         やめる
       </button>
-      {error && (
-        <span className="error" role="alert">
-          {error}
-        </span>
-      )}
+      {errorText}
     </form>
   )
 }
