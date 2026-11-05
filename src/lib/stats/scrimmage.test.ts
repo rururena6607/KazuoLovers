@@ -93,6 +93,13 @@ describe('bTeamServes（Aのサーブレシーブから。相手サーバーが�
     expect(p7).toMatchObject({ attempts: 5, aces: 1, effects: 2, misses: 1 })
     expect(p7.efficiency).toBe(25)
   })
+
+  it('knownTypeOnly：相手サーブの種類が空の本数は入れない（種類別の表で「その他」に混ぜない）', () => {
+    // p7 のサーブ 2 本：ジャンプと記録された C と、種類が空の D
+    const typed = [{ ...reception('C', 'b7', 'k1'), oppServeType: 'jump' as const }, reception('D', 'b7', 'k2')]
+    expect(bTeamServes(typed, members).map((s) => s.serveType)).toEqual(['jump', 'other'])
+    expect(bTeamServes(typed, members, { knownTypeOnly: true }).map((s) => s.serveType)).toEqual(['jump'])
+  })
 })
 
 describe('bTeamReceptions（Aのサーブから。受けた相手が入っていて A〜D の本数だけ）', () => {
