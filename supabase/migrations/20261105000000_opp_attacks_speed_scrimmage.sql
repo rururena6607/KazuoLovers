@@ -1,6 +1,9 @@
 -- T-48 相手のスパイク・速さ・矢印・列の境目・紅白戦の記録（F-24〜F-27、要件定義書 7 章）
 -- contracts（#51）に合わせて、既存の表に列と制約を足し、相手のスパイクの表（opp_attacks）を作る。
 -- 既存の行は変えない（足す列はすべて空でよい）。流すのは1回だけ（README）。
+-- 全体を1つのトランザクションにする：途中で失敗したら、何も変わらない（半端な状態を残さない）。
+
+begin;
 
 -- ---------------------------------------------------------------------------
 -- 紅白戦（F-27）：matches.kind に scrimmage を足す
@@ -103,3 +106,5 @@ create policy opp_attacks_all on public.opp_attacks for all to authenticated
 
 -- ほかの端末に反映する（T-25 と同じ）
 alter publication supabase_realtime add table public.opp_attacks;
+
+commit;

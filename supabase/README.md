@@ -20,6 +20,8 @@ Supabase CLI を入れていなくても、ダッシュボードの SQL Editor �
 - `serves.speed`、`attacks.from_x`・`from_y`・`speed`、`sets.col_split_1`・`col_split_2`、`opponent_players.player_id`
 - `matches.kind` に `scrimmage`、`points.cause` に `opp_kill`・`opp_attack_error`
 
+この SQL は全体が 1 つのトランザクション（`begin;` 〜 `commit;`）なので、途中で失敗したら何も変わらない（もう一度流して「すでにある」とエラーになっても、半端な状態は残らない）。
+
 **アプリを配る（main をマージする）前に、先にこの SQL を流す。** 流す前にアプリを配ると、アプリが `speed` などの列を読もうとして、記録の保存・読み込みがすべて失敗する。
 
 流したあと、`tests/rls_check.sql`（`RLS OK`）と `tests/rls_check_opp_attacks.sql`（`T-48 OK`）を貼って「Run」を押して確かめる。どちらも最後に rollback するので、データは残らない。
