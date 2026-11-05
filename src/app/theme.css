@@ -12,6 +12,7 @@
   --line: #171b30;
   --line-soft: #c9cddc;
   --font: system-ui, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --border: 2px solid var(--line);
   --tabbar-h: 56px;
   color-scheme: light;
@@ -88,6 +89,34 @@ button {
 .tabbar-item[aria-current='page'] {
   background: var(--selected);
   color: var(--on-selected);
+}
+
+/* 枠線つきのボタン。選択中は aria-pressed か aria-current で塗る */
+.btn {
+  min-height: 44px;
+  padding: 0 12px;
+  border: var(--border);
+  border-radius: 0;
+  background: var(--surface);
+  cursor: pointer;
+}
+.btn:active {
+  background: var(--line-soft);
+}
+.btn[aria-pressed='true'],
+.btn[aria-current] {
+  background: var(--selected);
+  color: var(--on-selected);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 等幅の数字（背番号・得点など） */
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .placeholder {
