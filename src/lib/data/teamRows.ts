@@ -140,6 +140,10 @@ export function checkMatch(m: MatchInput): string | null {
   return null
 }
 
+/** 紅白戦の B チームで、背番号が別の選手と重なったときの理由（本物の teamData とデモで同じ文） */
+export const duplicateNumberMessage = (number: number): string =>
+  `紅白戦の B チームに、背番号 ${number} の選手がすでにいます。ほかの背番号で入れてください。`
+
 /** 列の境目が正しいか。0 ≤ 左 < 右 ≤ 1（contracts の GameSet と DB の check と同じ）。正しくなければ理由を返す */
 export function checkColSplits(colSplit1: number, colSplit2: number): string | null {
   if (!Number.isFinite(colSplit1) || !Number.isFinite(colSplit2)) return '列の境目の値が正しくありません。'
@@ -188,6 +192,9 @@ export function toDataErrorMessage(error: { message: string; code?: string }): s
       return '入れた値が正しくありません。'
     case '42501':
       return 'このチームのデータを変える権限がありません。'
+    case 'PGRST116':
+      // 1 件のはずが 0 件（ないデータ、または権限がなくて見えない）
+      return 'データが見つかりませんでした（ないか、このチームのデータではありません）。'
   }
   if (/fetch|network/i.test(error.message)) {
     return '通信できませんでした。電波のよい場所でもう一度試してください。'

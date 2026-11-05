@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GameSet, OpponentPlayer } from '../../contracts/index.ts'
 import { DEMO_MATCH, DEMO_OPPONENT, DEMO_PRACTICE } from './demo.ts'
+import { duplicateNumberMessage } from '../../lib/data/teamRows.ts'
 import { createDemoMatchSource, parseOppNumber, withOppPlayer, withSet } from './matchSource.ts'
 
 const opp = (n: number): OpponentPlayer => ({ id: `o${n}`, opponentId: 'x', number: n })
@@ -71,5 +72,14 @@ describe('createDemoMatchSource の列の境目と紅白戦', () => {
     expect(added).toMatchObject({ number: 8, playerId: 'p8' })
     // 渡さなければ、これまでどおり背番号だけ
     expect(await src.addOpponentPlayer('o-b', 33)).not.toHaveProperty('playerId')
+  })
+
+  it('本物（teamData）と同じ：同じ部員なら返す。別の部員と背番号が重なるなら reject する。B チームごとに分ける', async () => {
+    const src = createDemoMatchSource()
+    const first = await src.addOpponentPlayer('o-b', 8, 'p8')
+    expect((await src.addOpponentPlayer('o-b', 8, 'p8')).id).toBe(first.id)
+    await expect(src.addOpponentPlayer('o-b', 8, 'p9')).rejects.toThrow(duplicateNumberMessage(8))
+    // 別の B チームなら、同じ背番号でも足せる
+    expect(await src.addOpponentPlayer('o-b2', 8, 'p9')).toMatchObject({ opponentId: 'o-b2', number: 8, playerId: 'p9' })
   })
 })

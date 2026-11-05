@@ -1,7 +1,7 @@
 // 記録画面が試合を開くための MatchRepository（contracts、#36）のデモ版と、MatchContext を手元で直す関数。
 // 本物は lib/data の teamData（ひろし、T-10）。キーがない手元ではデモ（下の createDemoMatchSource）を使う。
 import type { GameSet, MatchRepository, OpponentPlayer } from '../../contracts/index.ts'
-import { checkColSplits } from '../../lib/data/teamRows.ts'
+import { checkColSplits, duplicateNumberMessage } from '../../lib/data/teamRows.ts'
 import {
   DEMO_MATCH,
   DEMO_OPPONENT,
@@ -58,7 +58,16 @@ export function createDemoMatchSource(): MatchRepository {
       })
     },
     addOpponentPlayer: (opponentId, number, playerId) => {
-      const found = oppPlayers.find((o) => o.number === number)
+      const sameTeam = oppPlayers.filter((o) => o.opponentId === opponentId)
+      if (playerId !== undefined) {
+        // 紅白戦：本物（teamData）と同じ。同じ部員なら、それを返す。別の部員と背番号が重なるなら reject する
+        const linked = sameTeam.find((o) => o.playerId === playerId)
+        if (linked) return Promise.resolve(linked)
+        if (sameTeam.some((o) => o.number === number)) {
+          return Promise.reject(new Error(duplicateNumberMessage(number)))
+        }
+      }
+      const found = sameTeam.find((o) => o.number === number)
       if (found) return Promise.resolve(found)
       const added: OpponentPlayer = {
         id: `o${number}`,
