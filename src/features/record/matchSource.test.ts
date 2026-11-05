@@ -65,7 +65,11 @@ describe('createDemoMatchSource の列の境目と紅白戦', () => {
     await expect(src.updateColSplits('nothing', 0.3, 0.7)).rejects.toThrow()
   })
 
-  it('デモの試合は紅白戦ではないので、B チームの選手は足せない', async () => {
-    await expect(createDemoMatchSource().addScrimmagePlayer('o', 'p')).rejects.toThrow()
+  it('部員（playerId）を渡すと、B チームの選手として足せる（紅白戦。デモでも形は同じ）', async () => {
+    const src = createDemoMatchSource()
+    const added = await src.addOpponentPlayer('o-b', 8, 'p8')
+    expect(added).toMatchObject({ number: 8, playerId: 'p8' })
+    // 渡さなければ、これまでどおり背番号だけ
+    expect(await src.addOpponentPlayer('o-b', 33)).not.toHaveProperty('playerId')
   })
 })

@@ -9,7 +9,8 @@ type Err = { message: string; code?: string }
 
 interface Call {
   table: string
-  op: 'select' | 'insert' | 'update'
+  op: 'select' | 'insert' | 'update' | 'upsert'
+  onConflict?: string
   payload?: Row
   filters: [string, unknown][]
 }
@@ -26,8 +27,16 @@ function fakeClient(tables: Record<string, Row[]>) {
       calls.push(call)
       const matching = () => tables[table]?.filter((r) => call.filters.every(([k, v]) => r[k] === v)) ?? []
       const run = (): { data: Row[] | null; error: Err | null } => {
+        if (call.op === 'upsert') {
+          // onConflict の列が同じ行があれば、それを返す（ないときだけ足す）
+          const cols = (call.onConflict ?? '').split(',')
+          const same = tables[table]?.find((r) => cols.every((c) => r[c] === call.payload?.[c]))
+          if (same) return { data: [same], error: null }
+          call.op = 'insert'
+        }
         if (call.op === 'insert') {
-          const row = { ...call.payload }
+          // 本物の DB は、入れなかった列を null で返す
+          const row: Row = { ...(table === 'opponent_players' ? { player_id: null } : {}), ...call.payload }
           const dup = table === 'opponent_players' &&
             tables[table]?.some((r) => r.opponent_id === row.opponent_id && r.number === row.number)
           if (dup) return { data: null, error: { message: 'duplicate key', code: '23505' } }
@@ -42,6 +51,8 @@ function fakeClient(tables: Record<string, Row[]>) {
       const builder = {
         select: () => builder,
         insert: (payload: Row) => ((call.op = 'insert'), (call.payload = payload), builder),
+        upsert: (payload: Row, opts?: { onConflict?: string }) =>
+          ((call.op = 'upsert'), (call.payload = payload), (call.onConflict = opts?.onConflict), builder),
         update: (payload: Row) => ((call.op = 'update'), (call.payload = payload), builder),
         eq: (k: string, v: unknown) => (call.filters.push([k, v]), builder),
         returns: () => builder,
@@ -90,35 +101,46 @@ describe('updateColSplits（F-24）', () => {
   })
 })
 
-describe('addScrimmagePlayer（F-27）', () => {
+describe('addOpponentPlayer（F-04・F-27）', () => {
   const players = (): Row[] => [
     { id: 'p8', number: 8 },
     { id: 'p9', number: 9 },
   ]
 
-  it('B チームに、自チームの選手を、その選手の背番号で入れる（player_id つき）', async () => {
+  it('playerId なし：背番号だけで足す。同じ背番号がすでにあれば、それを返す（これまでどおり）', async () => {
+    const { client } = fakeClient({ opponent_players: [] })
+    const data = createSupabaseTeamData(() => client)
+    const first = await data.addOpponentPlayer('o1', 12)
+    expect(first).toMatchObject({ opponentId: 'o1', number: 12 })
+    expect(first).not.toHaveProperty('playerId')
+    const again = await data.addOpponentPlayer('o1', 12)
+    expect(again.id).toBe(first.id)
+  })
+
+  it('紅白戦：B チームに部員を、渡した背番号で入れる（player_id つき）', async () => {
     const { client, calls } = fakeClient({ players: players(), opponent_players: [] })
-    const added = await createSupabaseTeamData(() => client).addScrimmagePlayer('o-b', 'p8')
+    const added = await createSupabaseTeamData(() => client).addOpponentPlayer('o-b', 8, 'p8')
     expect(added).toMatchObject({ opponentId: 'o-b', number: 8, playerId: 'p8' })
     expect(calls.find((c) => c.op === 'insert')?.payload).toEqual({ opponent_id: 'o-b', number: 8, player_id: 'p8' })
   })
 
-  it('すでに入っている選手は、足さずにそれを返す', async () => {
+  it('紅白戦：すでに入っている部員は、足さずにそれを返す', async () => {
     const existing = { id: 'op1', opponent_id: 'o-b', number: 8, player_id: 'p8' }
     const { client, calls } = fakeClient({ players: players(), opponent_players: [existing] })
-    const again = await createSupabaseTeamData(() => client).addScrimmagePlayer('o-b', 'p8')
+    const again = await createSupabaseTeamData(() => client).addOpponentPlayer('o-b', 8, 'p8')
     expect(again).toMatchObject({ id: 'op1', playerId: 'p8' })
     expect(calls.some((c) => c.op === 'insert')).toBe(false)
   })
 
-  it('B チームの別の選手と背番号が重なるときは、足せない（一意制約）', async () => {
+  it('紅白戦：B チームの別の選手と背番号が重なるときは、足せない（一意制約）。黙ってその選手を返さない', async () => {
     const other = { id: 'op2', opponent_id: 'o-b', number: 8, player_id: 'p-other' }
     const { client } = fakeClient({ players: players(), opponent_players: [other] })
-    await expect(createSupabaseTeamData(() => client).addScrimmagePlayer('o-b', 'p8')).rejects.toThrow('重なっています')
+    await expect(createSupabaseTeamData(() => client).addOpponentPlayer('o-b', 8, 'p8')).rejects.toThrow('重なっています')
   })
 
-  it('ない選手は足せない', async () => {
-    const { client } = fakeClient({ players: players(), opponent_players: [] })
-    await expect(createSupabaseTeamData(() => client).addScrimmagePlayer('o-b', 'nobody')).rejects.toThrow()
+  it('背番号が 0〜99 でなければ、送らずに断る', async () => {
+    const { client, calls } = fakeClient({ players: players(), opponent_players: [] })
+    await expect(createSupabaseTeamData(() => client).addOpponentPlayer('o-b', 100, 'p8')).rejects.toThrow('0〜99')
+    expect(calls).toHaveLength(0)
   })
 })

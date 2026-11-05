@@ -60,8 +60,11 @@ export interface TeamData {
   listOpponents(teamId: string): Promise<Opponent[]>
   createOpponent(teamId: string, name: string): Promise<Opponent>
   listOpponentPlayers(opponentId: string): Promise<OpponentPlayer[]>
-  /** 同じ背番号がすでにあれば、それを返す（試合中にその場で足す。F-04） */
-  addOpponentPlayer(opponentId: string, number: number): Promise<OpponentPlayer>
+  /**
+   * 同じ背番号がすでにあれば、それを返す（試合中にその場で足す。F-04）。
+   * playerId（自チームの部員）を渡すと、紅白戦の B チームの選手として結ぶ（F-27）
+   */
+  addOpponentPlayer(opponentId: string, number: number, playerId?: string): Promise<OpponentPlayer>
   /** 日付の新しい順 */
   listMatches(teamId: string): Promise<Match[]>
   /** 試合を作り、第1セットも作る */
@@ -71,8 +74,6 @@ export interface TeamData {
   createNextSet(matchId: string): Promise<GameSet>
   /** セットの相手コートの列の境目を保存する（F-24）。0 ≤ 左 < 右 ≤ 1 */
   updateColSplits(setId: string, colSplit1: number, colSplit2: number): Promise<GameSet>
-  /** 紅白戦の B チームに自チームの選手を入れる（F-27）。すでに入っていれば、それを返す */
-  addScrimmagePlayer(opponentId: string, playerId: string): Promise<OpponentPlayer>
   loadMatch(matchId: string): Promise<MatchContext>
 }
 
@@ -188,14 +189,37 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
       )
     },
     listOpponentPlayers,
-    async addOpponentPlayer(opponentId, number) {
+    async addOpponentPlayer(opponentId, number, playerId) {
       fail(checkOpponentPlayerNumber(number))
-      // (opponent_id, number) は一意なので、すでにあれば同じ行が返る
+      if (playerId === undefined) {
+        // (opponent_id, number) は一意なので、すでにあれば同じ行が返る
+        return opponentPlayerFromRow(
+          check(
+            await db()
+              .from('opponent_players')
+              .upsert({ opponent_id: opponentId, number }, { onConflict: 'opponent_id,number' })
+              .select(COLUMNS.opponent_players)
+              .single<OpponentPlayerRow>(),
+          ),
+        )
+      }
+      // 紅白戦：B チームに部員を入れる。すでに入っていれば、それを返す
+      const found = check(
+        await db()
+          .from('opponent_players')
+          .select(COLUMNS.opponent_players)
+          .eq('opponent_id', opponentId)
+          .eq('player_id', playerId)
+          .returns<OpponentPlayerRow[]>(),
+      )
+      const existing = found[0]
+      if (existing) return opponentPlayerFromRow(existing)
+      // 背番号が B チームの別の選手と重なると、一意制約（opponent_id, number）で reject される
       return opponentPlayerFromRow(
         check(
           await db()
             .from('opponent_players')
-            .upsert({ opponent_id: opponentId, number }, { onConflict: 'opponent_id,number' })
+            .insert({ opponent_id: opponentId, number, player_id: playerId })
             .select(COLUMNS.opponent_players)
             .single<OpponentPlayerRow>(),
         ),
@@ -242,31 +266,6 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
             .eq('id', setId)
             .select(COLUMNS.sets)
             .single<SetRow>(),
-        ),
-      )
-    },
-    async addScrimmagePlayer(opponentId, playerId) {
-      // B チームの選手の背番号は、その選手のもの（opponent_players の背番号は B チームの中で一意）
-      const player = check(
-        await db().from('players').select('id,number').eq('id', playerId).single<{ id: string; number: number }>(),
-      )
-      const found = check(
-        await db()
-          .from('opponent_players')
-          .select(COLUMNS.opponent_players)
-          .eq('opponent_id', opponentId)
-          .eq('player_id', playerId)
-          .returns<OpponentPlayerRow[]>(),
-      )
-      const existing = found[0]
-      if (existing) return opponentPlayerFromRow(existing)
-      return opponentPlayerFromRow(
-        check(
-          await db()
-            .from('opponent_players')
-            .insert({ opponent_id: opponentId, number: player.number, player_id: playerId })
-            .select(COLUMNS.opponent_players)
-            .single<OpponentPlayerRow>(),
         ),
       )
     },

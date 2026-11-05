@@ -57,10 +57,15 @@ export function createDemoMatchSource(): MatchRepository {
         opponentPlayers: [...oppPlayers],
       })
     },
-    addOpponentPlayer: (opponentId, number) => {
+    addOpponentPlayer: (opponentId, number, playerId) => {
       const found = oppPlayers.find((o) => o.number === number)
       if (found) return Promise.resolve(found)
-      const added: OpponentPlayer = { id: `o${number}`, opponentId, number }
+      const added: OpponentPlayer = {
+        id: `o${number}`,
+        opponentId,
+        number,
+        ...(playerId !== undefined ? { playerId } : {}),
+      }
       oppPlayers = [...oppPlayers, added].sort((a, b) => a.number - b.number)
       return Promise.resolve(added)
     },
@@ -79,7 +84,5 @@ export function createDemoMatchSource(): MatchRepository {
       splitSets.set(setId, updated)
       return Promise.resolve(updated)
     },
-    // デモの試合は紅白戦ではないので、B チームの選手を入れる場面がない
-    addScrimmagePlayer: () => Promise.reject(new Error('デモの試合は紅白戦ではありません。')),
   }
 }
