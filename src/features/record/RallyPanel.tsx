@@ -1,12 +1,19 @@
 import { useState } from 'react'
-import Court from '../../components/Court.tsx'
+import FullCourt from '../../components/FullCourt.tsx'
 import type { AttackRecord, Grade, Player } from '../../contracts/index.ts'
-import { buildAttack, emptyAttackDraft, withAttackType, type AttackDraft } from './attack.ts'
+import {
+  buildAttack,
+  emptyAttackDraft,
+  withArrowTap,
+  withAttackType,
+  type AttackDraft,
+} from './attack.ts'
 import { newIds } from './ids.ts'
 import { ATTACK_RESULTS, ATTACK_TYPES, playerLabel } from './labels.ts'
+import SpeedPicker from './SpeedPicker.tsx'
 
 // ラリー中のアタックの記録（F-20）。打った選手 → 結果 で確定する（1本2タップ）。
-// 攻撃の種類・バックアタック・打った方向は任意。決定・ミス・被ブロックは得点を自動で更新する。
+// 攻撃の種類・バックアタック・打った位置と方向（矢印）・速さは任意。決定・ミス・被ブロックは得点を自動で更新する。
 
 interface Props {
   setId: string
@@ -81,11 +88,14 @@ export default function RallyPanel({ setId, players, prevReception, onSave }: Pr
         </button>
       </div>
 
-      <Court
-        side="opponent"
-        label="相手コート（打った方向・任意）"
-        marks={draft.to ? [draft.to] : []}
-        onTap={(p) => update({ to: p })}
+      <SpeedPicker value={draft.speed} onChange={(speed) => update({ speed })} />
+
+      <p className="court-hint">矢印（任意）：自コートで打った位置、相手コートで打った方向をタップ</p>
+      <FullCourt
+        label="コート（打った位置から打った方向への矢印・任意）"
+        from={draft.from && { side: 'own', p: draft.from }}
+        to={draft.to && { side: 'opponent', p: draft.to }}
+        onTap={(end) => setDraft((d) => withArrowTap(d, end.side, end.p))}
       />
     </div>
   )

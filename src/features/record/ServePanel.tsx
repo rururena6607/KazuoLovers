@@ -5,6 +5,7 @@ import AddOppNumber from './AddOppNumber.tsx'
 import EndlinePicker from './EndlinePicker.tsx'
 import { newIds } from './ids.ts'
 import { GRADES, MISS_TYPES, SERVE_TYPES, playerLabel, toggle } from './labels.ts'
+import SpeedPicker from './SpeedPicker.tsx'
 import {
   buildServe,
   emptyDraft,
@@ -124,6 +125,7 @@ export default function ServePanel({
         }}
       />
       <EndlinePicker x={draft.fromX} onChange={(x) => update({ fromX: x })} />
+      <SpeedPicker value={draft.speed} onChange={(speed) => update({ speed })} />
 
       {pickingMiss ? (
         <div className="row results" role="group" aria-label="ミスの種類">
