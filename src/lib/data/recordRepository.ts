@@ -2,6 +2,7 @@
 // 差し替えられ、テストでは偽物を渡す。
 // 保存と削除は、まず端末の送信待ちに入れて購読している画面にすぐ反映し、そのあとで送る。
 // 送れなかったものは送信待ちに残り、次の保存か retry() で送り直す。自動の再送は autoRetry.ts。
+// ほかの端末の記録は、送る先の watch（Realtime、T-25）で受け取って反映する。
 import type {
   AnyRecord,
   RecordRepository,
@@ -18,6 +19,15 @@ export interface RemoteRecordStore {
   listBySet(setId: string): Promise<SetRecords>
   /** その試合のセットの id を、セットの番号の順に返す */
   listSetIds(matchId: string): Promise<string[]>
+  /** ほかの端末の変更を知らせる（T-25、Realtime）。なければ、自分の端末の変更だけを反映する */
+  watch?(matchId: string, setIds: readonly string[], changes: RemoteChanges): Unsubscribe
+}
+
+export interface RemoteChanges {
+  /** その試合のセットの記録が足された・直された */
+  onRecord(rec: AnyRecord): void
+  /** 記録が消された、セットが増えた、つなぎ直したなど、読み直しが要る */
+  onReload(): void
 }
 
 /** 送信待ちの操作。同じ clientId は新しい操作で置き換える */
@@ -51,6 +61,10 @@ interface Subscription {
   loading: Promise<void> | null
   /** 読んでいるあいだに読み直しを頼まれた */
   reload: boolean
+  /** ほかの端末の変更の受け取りをやめる */
+  unwatch: Unsubscribe | null
+  /** 受け取っているセットの id（変わったら受け取り直す） */
+  watching: string | null
 }
 
 const byTime = (a: { recordedAt: string }, b: { recordedAt: string }) =>
@@ -140,6 +154,7 @@ export function createRecordRepository(
           let sets = overlayPending(loaded)
           for (const op of during) sets = applyOp(sets, op) ?? sets
           sub.sets = sets
+          watch(sub, ids)
         } catch (e) {
           // 読めなかったら空で知らせ、retry() で読み直す
           console.error('記録を読めませんでした', e)
@@ -151,6 +166,36 @@ export function createRecordRepository(
       if (subs.has(sub)) sub.onChange(sub.sets ?? [])
     })()
     return sub.loading
+  }
+
+  /** ほかの端末の変更を受け取る。セットが変わったら受け取り直す */
+  const watch = (sub: Subscription, setIds: string[]) => {
+    const key = setIds.join(',')
+    if (!remote.watch || !subs.has(sub) || sub.watching === key) return
+    sub.unwatch?.()
+    sub.watching = key
+    sub.unwatch = remote.watch(sub.matchId, setIds, {
+      onRecord(rec) {
+        // 自分の端末で直してまだ送っていない記録は、そちらを新しいものとする（古い版が届いても戻さない）
+        if (!subs.has(sub) || pending.has(rec.clientId)) return
+        const op: Op = { type: 'save', rec }
+        if (sub.during) {
+          sub.during.push(op)
+          return
+        }
+        if (!sub.sets) return
+        const next = applyOp(sub.sets, op)
+        if (next) {
+          sub.sets = next
+          sub.onChange(next)
+        } else {
+          void load(sub)
+        }
+      },
+      onReload() {
+        if (subs.has(sub)) void load(sub)
+      },
+    })
   }
 
   /** 操作を購読している画面に反映する */
@@ -255,10 +300,16 @@ export function createRecordRepository(
         during: null,
         loading: null,
         reload: false,
+        unwatch: null,
+        watching: null,
       }
       subs.add(sub)
       void load(sub)
-      return () => subs.delete(sub)
+      return () => {
+        subs.delete(sub)
+        sub.unwatch?.()
+        sub.unwatch = null
+      }
     },
     subscribePending(onChange): Unsubscribe {
       pendingListeners.add(onChange)
