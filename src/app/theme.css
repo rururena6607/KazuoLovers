@@ -494,3 +494,18 @@ button {
     margin: 0 auto;
   }
 }
+
+/* 名前を大きく出す選手のボタン（練習モード。練習では背番号を使わない） */
+.chip-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.chip-name-main {
+  font-size: 17px;
+  font-weight: 700;
+}
+.chip-name-sub {
+  font-size: 11px;
+  opacity: 0.7;
+}
