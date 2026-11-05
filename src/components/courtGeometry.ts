@@ -3,7 +3,7 @@
 // x は左端 0.0〜右端 1.0、y はネット側 0.0〜エンドライン 1.0。
 // 画面では相手コートはネットが下（奥のエンドラインが上）、自コートはネットが上に来る。
 import type { MouseEvent } from 'react'
-import { ZONES } from '../contracts/index.ts'
+import { DEFAULT_COL_SPLITS, ZONES } from '../contracts/index.ts'
 import type { CourtSide } from '../lib/court/index.ts'
 
 /** viewBox の大きさ。コートの外（アウト）もタップできるよう、周りに余白をとる */
@@ -75,3 +75,29 @@ export function courtToFull(side: CourtSide, p: CourtPoint): CourtPoint {
   const s = courtToSvg(side, p)
   return side === 'own' ? { x: s.x, y: s.y + OWN_OFFSET_Y } : s
 }
+
+// 相手コートの列の境目（F-24）。縦の点線2本を左右に動かす。保存する値は GameSet の colSplit1・colSplit2。
+
+/** 列の境目2本（0.0〜1.0。左の列と中の列、中の列と右の列の間） */
+export type ColSplits = readonly [number, number]
+
+/**
+ * 点線どうし・点線とサイドラインを近づけすぎない幅（コートの幅に対する割合）。
+ * contracts の「0 ≤ colSplit1 < colSplit2 ≤ 1」を守り、指で点線をつかみ直せるようにする画面だけの値
+ */
+export const MIN_COL_GAP = 0.05
+
+/** セットの境目。両方そろっていなければ既定（3 等分。config の DEFAULT_COL_SPLITS） */
+export const colSplitsOf = (set: { colSplit1?: number; colSplit2?: number }): ColSplits =>
+  set.colSplit1 !== undefined && set.colSplit2 !== undefined
+    ? [set.colSplit1, set.colSplit2]
+    : DEFAULT_COL_SPLITS
+
+/** 点線を x へ動かす。index は 0＝左の点線、1＝右の点線。もう一方の点線とサイドラインを越えない */
+export function moveColSplit(splits: ColSplits, index: 0 | 1, x: number): ColSplits {
+  const [a, b] = splits
+  if (index === 0) return [clamp(x, MIN_COL_GAP, b - MIN_COL_GAP), b]
+  return [a, clamp(x, a + MIN_COL_GAP, 1 - MIN_COL_GAP)]
+}
+
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v))

@@ -1,5 +1,5 @@
-import type { MouseEvent } from 'react'
-import { ATTACK_LINE_Y } from '../contracts/index.ts'
+import { useRef, useState, type MouseEvent, type PointerEvent } from 'react'
+import { ATTACK_LINE_Y, DEFAULT_COL_SPLITS } from '../contracts/index.ts'
 import { type CourtSide, zoneBounds, zoneCenter } from '../lib/court/index.ts'
 import {
   COURT_H,
@@ -12,8 +12,10 @@ import {
   allZones,
   courtToSvg,
   eventToSvg,
+  moveColSplit,
   svgToCourt,
   zoneLabel,
+  type ColSplits,
   type CourtPoint,
 } from './courtGeometry.ts'
 
@@ -34,24 +36,88 @@ interface Props {
   highlightZone?: number | null
   onTap?: (p: CourtPoint) => void
   label: string
+  /** 相手コートの列の境目（F-24）。省略時は 3 等分 */
+  colSplits?: ColSplits
+  /** あれば相手コートの点線をドラッグで動かせる（F-24） */
+  onColSplitsChange?: (splits: ColSplits) => void
+  /** 点線を離したとき（保存はここで1回だけ） */
+  onColSplitsCommit?: (splits: ColSplits) => void
 }
 
-export default function Court({ side, marks = [], highlightZone = null, onTap, label }: Props) {
+export default function Court({
+  side,
+  marks = [],
+  highlightZone = null,
+  onTap,
+  label,
+  colSplits = DEFAULT_COL_SPLITS,
+  onColSplitsChange,
+  onColSplitsCommit,
+}: Props) {
+  /** つかんでいる点線（0＝左、1＝右）。null はつかんでいない */
+  const [dragging, setDragging] = useState<0 | 1 | null>(null)
+  /** ドラッグを離したときのクリックで、着弾点を置かないようにする */
+  const justDragged = useRef(false)
+  const canDrag = side === 'opponent' && onColSplitsChange !== undefined
+
   const handleClick = (e: MouseEvent<SVGSVGElement>) => {
+    if (justDragged.current) {
+      justDragged.current = false
+      return
+    }
     if (!onTap) return
     const pt = eventToSvg(e)
     if (pt) onTap(svgToCourt(side, pt))
   }
 
+  const grab = (index: 0 | 1) => (e: PointerEvent<SVGLineElement>) => {
+    e.stopPropagation()
+    justDragged.current = false
+    e.currentTarget.ownerSVGElement?.setPointerCapture(e.pointerId)
+    setDragging(index)
+  }
+  const drag = (e: PointerEvent<SVGSVGElement>) => {
+    if (dragging === null || !onColSplitsChange) return
+    const pt = eventToSvg(e)
+    if (!pt) return
+    justDragged.current = true
+    onColSplitsChange(moveColSplit(colSplits, dragging, svgToCourt(side, pt).x))
+  }
+  const release = () => {
+    if (dragging !== null) onColSplitsCommit?.(colSplits)
+    setDragging(null)
+  }
+
   return (
     <svg
-      className="court"
+      className={dragging === null ? 'court' : 'court is-dragging'}
       viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
       role="img"
       aria-label={label}
       onClick={handleClick}
+      onPointerDown={() => {
+        // 前のドラッグのあとにクリックが来なかったときも、次のタップを捨てない
+        justDragged.current = false
+      }}
+      onPointerMove={drag}
+      onPointerUp={release}
+      onPointerCancel={release}
     >
-      <CourtLayer side={side} marks={marks} highlightZone={highlightZone} />
+      <CourtLayer side={side} marks={marks} highlightZone={highlightZone} colSplits={colSplits} />
+      {/* 点線をつかむための、見えない太い線 */}
+      {canDrag &&
+        colSplits.map((s, i) => (
+          <line
+            key={i}
+            x1={MARGIN_X + COURT_W * s}
+            x2={MARGIN_X + COURT_W * s}
+            y1={MARGIN_Y}
+            y2={MARGIN_Y + COURT_H}
+            className="court-split-handle"
+            aria-label={`列の境目（${i === 0 ? '左' : '右'}）`}
+            onPointerDown={grab(i === 0 ? 0 : 1)}
+          />
+        ))}
     </svg>
   )
 }
@@ -60,13 +126,20 @@ interface LayerProps {
   side: CourtSide
   marks?: readonly CourtMark[]
   highlightZone?: number | null
+  /** 相手コートの列の境目（F-24）。自コートでは使わない */
+  colSplits?: ColSplits
 }
 
 /**
  * 片面のコート（床・ゾーン・線・ネット・印）。座標は viewBox 0 0 VIEW_W VIEW_H のまま描くので、
  * 両面のコート図（FullCourt）では <g transform> でずらして重ねる
  */
-export function CourtLayer({ side, marks = [], highlightZone = null }: LayerProps) {
+export function CourtLayer({
+  side,
+  marks = [],
+  highlightZone = null,
+  colSplits = DEFAULT_COL_SPLITS,
+}: LayerProps) {
   const netY = side === 'opponent' ? MARGIN_Y + COURT_H : MARGIN_Y
   const attackY = courtToSvg(side, { x: 0, y: ATTACK_LINE_Y }).y
 
@@ -93,11 +166,12 @@ export function CourtLayer({ side, marks = [], highlightZone = null }: LayerProp
         const r = zoneRect(z)
         return r && <rect key={z} {...r} fill={zoneColor(z)} className="court-zone" />
       })}
-      {[1, 2].map((i) => (
+      {/* 列の境目の点線。相手コートはセットごとに動かせる（F-24）。自コートは 3 等分のまま */}
+      {(side === 'opponent' ? colSplits : DEFAULT_COL_SPLITS).map((s, i) => (
         <line
           key={i}
-          x1={MARGIN_X + (COURT_W * i) / 3}
-          x2={MARGIN_X + (COURT_W * i) / 3}
+          x1={MARGIN_X + COURT_W * s}
+          x2={MARGIN_X + COURT_W * s}
           y1={MARGIN_Y}
           y2={MARGIN_Y + COURT_H}
           className="court-zone-line"
