@@ -8,8 +8,10 @@ import {
   matchFromRow,
   matchToRow,
   nextSetNo,
+  opponentPlayerFromRow,
   playerFromRow,
   playerToRow,
+  setFromRow,
   sortPlayers,
   toDataErrorMessage,
   type MatchInput,
@@ -119,6 +121,58 @@ describe('試合', () => {
     expect(checkMatch({ ...match, date: '' })).toBe('日付を選んでください。')
     expect(checkMatch({ ...match, kind: 'practice' })).toBe('練習には相手を付けません。')
     expect(checkMatch({ ...match, setPoints: 0 })).toBe('1セットの点数は 1〜50 で入れてください。')
+  })
+})
+
+describe('紅白戦（F-27）', () => {
+  it('B チームの相手チームを持つ。練習と違い、相手は送る', () => {
+    const scrimmage: MatchInput = { ...match, kind: 'scrimmage', opponentId: 'o-b' }
+    expect(matchToRow('t1', scrimmage)).toMatchObject({ kind: 'scrimmage', opponent_id: 'o-b' })
+    const row = { id: 'm2', ...matchToRow('t1', scrimmage) }
+    expect(matchFromRow(row)).toMatchObject({ kind: 'scrimmage', opponentId: 'o-b' })
+  })
+
+  it('B チームがないと、紅白戦は作れない', () => {
+    expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: 'o-b' })).toBeNull()
+    expect(checkMatch({ ...match, kind: 'scrimmage', opponentId: null })).toBe('紅白戦には B チームを付けてください。')
+  })
+
+  it('B チームの選手は、対応する自チームの選手（player_id）を持つ。ふつうの相手選手は、これまでと同じ形', () => {
+    expect(opponentPlayerFromRow({ id: 'op1', opponent_id: 'o-b', number: 8, player_id: 'p8' })).toEqual({
+      id: 'op1',
+      opponentId: 'o-b',
+      number: 8,
+      playerId: 'p8',
+    })
+    expect(opponentPlayerFromRow({ id: 'op2', opponent_id: 'o1', number: 4, player_id: null })).toEqual({
+      id: 'op2',
+      opponentId: 'o1',
+      number: 4,
+    })
+  })
+})
+
+describe('セットの列の境目（F-24）', () => {
+  const base = { id: 's1', match_id: 'm1', set_no: 1, our_score: 10, opp_score: 8 }
+
+  it('両方あれば GameSet に入れる', () => {
+    expect(setFromRow({ ...base, col_split_1: 0.3, col_split_2: 0.7 })).toEqual({
+      id: 's1',
+      matchId: 'm1',
+      setNo: 1,
+      ourScore: 10,
+      oppScore: 8,
+      colSplit1: 0.3,
+      colSplit2: 0.7,
+    })
+  })
+
+  it('空（既定の 3 等分）なら、付けない。片方だけのときも付けない（両方そろえて設定する約束）', () => {
+    const empty = setFromRow({ ...base, col_split_1: null, col_split_2: null })
+    expect(empty).not.toHaveProperty('colSplit1')
+    expect(empty).not.toHaveProperty('colSplit2')
+    const half = setFromRow({ ...base, col_split_1: 0.3, col_split_2: null })
+    expect(half).not.toHaveProperty('colSplit1')
   })
 })
 
