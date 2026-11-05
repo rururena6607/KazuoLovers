@@ -12,6 +12,21 @@ Supabase CLI を入れていなくても、ダッシュボードの SQL Editor �
 
 流した SQL は、もう一度流さない（同じテーブルを作ろうとしてエラーになる）。テーブルを変えるときは、新しいファイルを `migrations/` に足す。
 
+## 相手のスパイク・速さ・矢印・列の境目・紅白戦（T-48）
+
+`migrations/20261105000000_opp_attacks_speed_scrimmage.sql` で、次を足す。**すでに流した SQL には手を入れず、このファイルだけを1回流す。**
+
+- `opp_attacks` 表（相手のスパイク）。RLS と Realtime つき
+- `serves.speed`、`attacks.from_x`・`from_y`・`speed`、`sets.col_split_1`・`col_split_2`、`opponent_players.player_id`
+- `matches.kind` に `scrimmage`、`points.cause` に `opp_kill`・`opp_attack_error`
+
+**アプリを配る（main をマージする）前に、先にこの SQL を流す。** 流す前にアプリを配ると、アプリが `speed` などの列を読もうとして、記録の保存・読み込みがすべて失敗する。
+
+流したあと、`tests/rls_check.sql`（`RLS OK`）と `tests/rls_check_opp_attacks.sql`（`T-48 OK`）を貼って「Run」を押して確かめる。どちらも最後に rollback するので、データは残らない。
+
+- 列の境目は、両方空なら既定（3 等分）。設定するときは両方そろえ、0 ≤ 左 < 右 ≤ 1（`check` 制約）
+- 紅白戦の B チームは、相手チーム（`opponents`）として持つ。B チームの選手（`opponent_players`）の `player_id` に自チームの選手を入れると、その部員個人の成績に入れられる。同じ部員は B チームに 1 回だけ
+
 ## 認証の設定（T-03）
 
 ログインは、メールに届く6桁のコードを入れる方式にする（ログインリンクは、iPhone ではホーム画面のアプリではなく Safari で開くので使わない）。

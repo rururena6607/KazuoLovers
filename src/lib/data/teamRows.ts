@@ -28,6 +28,8 @@ export interface OpponentPlayerRow {
   id: string
   opponent_id: string
   number: number
+  /** 紅白戦の B チームの選手にあたる自チームの選手。ふつうの試合は null */
+  player_id: string | null
 }
 
 export interface MatchRow {
@@ -46,14 +48,17 @@ export interface SetRow {
   set_no: number
   our_score: number
   opp_score: number
+  /** 相手コートの列の境目。両方 null ＝ 既定（3 等分） */
+  col_split_1: number | null
+  col_split_2: number | null
 }
 
 export const COLUMNS = {
   players: 'id,team_id,number,name,position,serve_type,active',
   opponents: 'id,team_id,name',
-  opponent_players: 'id,opponent_id,number',
+  opponent_players: 'id,opponent_id,number,player_id',
   matches: 'id,team_id,kind,opponent_id,date,tournament,set_points',
-  sets: 'id,match_id,set_no,our_score,opp_score',
+  sets: 'id,match_id,set_no,our_score,opp_score,col_split_1,col_split_2',
 } as const
 
 /** 1試合のセットの数の上限（sets.set_no は 1〜5） */
@@ -79,6 +84,8 @@ export const opponentPlayerFromRow = (r: OpponentPlayerRow): OpponentPlayer => (
   id: r.id,
   opponentId: r.opponent_id,
   number: r.number,
+  // 紅白戦のときだけ付く。ふつうの試合は、これまでと同じ形（付けない）
+  ...(r.player_id !== null ? { playerId: r.player_id } : {}),
 })
 
 export const matchFromRow = (r: MatchRow): Match => ({
@@ -97,6 +104,10 @@ export const setFromRow = (r: SetRow): GameSet => ({
   setNo: r.set_no,
   ourScore: r.our_score,
   oppScore: r.opp_score,
+  // 両方そろっているときだけ付ける（空は既定の 3 等分。contracts の GameSet）
+  ...(r.col_split_1 !== null && r.col_split_2 !== null
+    ? { colSplit1: r.col_split_1, colSplit2: r.col_split_2 }
+    : {}),
 })
 
 /** 選手を作る・直すときに渡すもの。id がなければ作る */
@@ -122,6 +133,7 @@ export function checkOpponentPlayerNumber(n: number): string | null {
 export function checkMatch(m: MatchInput): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(m.date)) return '日付を選んでください。'
   if (m.kind === 'practice' && m.opponentId !== null) return '練習には相手を付けません。'
+  if (m.kind === 'scrimmage' && m.opponentId === null) return '紅白戦には B チームを付けてください。'
   if (!Number.isInteger(m.setPoints) || m.setPoints < 1 || m.setPoints > 50) {
     return '1セットの点数は 1〜50 で入れてください。'
   }
