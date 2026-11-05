@@ -9,6 +9,7 @@ import type {
   SetRecords,
 } from '../../contracts/index.ts'
 import { zoneOf } from '../../lib/court/index.ts'
+import { digGradeOf } from './dig.ts'
 import { ATTACK_RESULTS, MISS_TYPES } from './labels.ts'
 import { gradeOf } from './reception.ts'
 import { byRecordedAt } from './score.ts'
@@ -20,7 +21,9 @@ export type Entry = PlayRecord | PointRecord
 export function entriesOf(set: SetRecords | undefined): Entry[] {
   if (!set) return []
   const manual = set.points.filter((p) => p.sourceId === null)
-  return [...set.serves, ...set.receptions, ...set.attacks, ...manual].sort(byRecordedAt)
+  return [...set.serves, ...set.receptions, ...set.attacks, ...(set.oppAttacks ?? []), ...manual].sort(
+    byRecordedAt,
+  )
 }
 
 /** 1行を消すときに消す記録の clientId。1本を消すとその得点も消す（取消で得点も戻る） */
@@ -29,16 +32,18 @@ export function idsToRemove(entry: Entry, points: readonly PointRecord[]): strin
   return [entry.clientId, ...points.filter((p) => p.sourceId === entry.clientId).map((p) => p.clientId)]
 }
 
-/** 得点が変わらない修正だけを許す：インのサーブと A〜D のレシーブの評価 */
+/** 得点が変わらない修正だけを許す：インのサーブと A〜D のレシーブ・相手のスパイクを拾った評価 */
 export function editableGrade(entry: Entry): Grade | null {
   if (entry.kind === 'serve' && entry.result === 'in') return entry.reception
   if (entry.kind === 'reception') return gradeOf(entry)
+  if (entry.kind === 'opp_attack') return digGradeOf(entry.result)
   return null
 }
 
 export function withGrade(entry: Entry, grade: Grade): Entry {
   if (entry.kind === 'serve' && entry.result === 'in') return { ...entry, reception: grade }
   if (entry.kind === 'reception' && editableGrade(entry) !== null) return { ...entry, result: grade }
+  if (entry.kind === 'opp_attack' && editableGrade(entry) !== null) return { ...entry, result: grade }
   return entry
 }
 

@@ -1,9 +1,10 @@
-// 試合（F-05）：試合か練習かを選んで作り、記録画面に進む。作ると第1セットもできる。
+// 試合（F-05）：試合・練習・紅白戦（F-27）のどれかを選んで作り、記録画面に進む。作ると第1セットもできる。
+// 紅白戦の B チームは自動で作る。試合・練習・紅白戦は、あとから削除できる（記録もいっしょに消える）。
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { DEFAULT_SET_POINTS, type Match, type Opponent } from '../../contracts/index.ts'
 import type { TeamData } from '../../lib/data/teamData.ts'
 import type { MatchInput } from '../../lib/data/teamRows.ts'
-import { today } from './labels.ts'
+import { MATCH_KIND_LABELS, matchLabel, today } from './labels.ts'
 import { useAction } from './useAction.ts'
 
 interface Props {
@@ -25,6 +26,8 @@ export function MatchesSection({ data, teamId, opponents, onOpenMatch }: Props) 
   const [matches, setMatches] = useState<Match[] | null>(null)
   const [input, setInput] = useState<MatchInput | null>(null)
   const [pointsText, setPointsText] = useState(String(DEFAULT_SET_POINTS))
+  /** 削除の確認を出している試合（押し間違いで記録を消さないよう、2 回押す） */
+  const [confirmId, setConfirmId] = useState<string | null>(null)
   const { busy, error, run } = useAction()
 
   const reload = useCallback(
@@ -36,7 +39,13 @@ export function MatchesSection({ data, teamId, opponents, onOpenMatch }: Props) 
     void reload()
   }, [reload])
 
-  const opponentName = (id: string | null) => opponents.find((o) => o.id === id)?.name ?? '（相手なし）'
+  const onDelete = (id: string) => {
+    void run(async () => {
+      await data.deleteMatch(id)
+      setConfirmId(null)
+      setMatches((list) => (list ?? []).filter((m) => m.id !== id))
+    })
+  }
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -59,7 +68,7 @@ export function MatchesSection({ data, teamId, opponents, onOpenMatch }: Props) 
       {input ? (
         <form className="admin-form" onSubmit={onSubmit}>
           <div className="admin-choices">
-            {(['match', 'practice'] as const).map((kind) => (
+            {(['match', 'practice', 'scrimmage'] as const).map((kind) => (
               <button
                 key={kind}
                 type="button"
@@ -69,11 +78,12 @@ export function MatchesSection({ data, teamId, opponents, onOpenMatch }: Props) 
                   setInput({
                     ...input,
                     kind,
-                    opponentId: kind === 'practice' ? null : (opponents[0]?.id ?? null),
+                    // 練習には相手がなく、紅白戦の B チームは作るときに自動で付く
+                    opponentId: kind === 'match' ? (opponents[0]?.id ?? null) : null,
                   })
                 }
               >
-                {kind === 'match' ? '試合' : '練習'}
+                {MATCH_KIND_LABELS[kind]}
               </button>
             ))}
           </div>
@@ -113,17 +123,24 @@ export function MatchesSection({ data, teamId, opponents, onOpenMatch }: Props) 
                   onChange={(e) => setInput({ ...input, tournament: e.target.value })}
                 />
               </label>
-              <label>
-                1セットの点数
-                <input
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  required
-                  value={pointsText}
-                  onChange={(e) => setPointsText(e.target.value)}
-                />
-              </label>
             </>
+          )}
+          {input.kind === 'scrimmage' && (
+            <p className="admin-mute">
+              部員だけでやる試合形式です。B チームは自動で作ります（記録画面で、両チームの選手を部員から選べます）。
+            </p>
+          )}
+          {input.kind !== 'practice' && (
+            <label>
+              1セットの点数
+              <input
+                inputMode="numeric"
+                pattern="[0-9]*"
+                required
+                value={pointsText}
+                onChange={(e) => setPointsText(e.target.value)}
+              />
+            </label>
           )}
           <div className="admin-actions">
             <button type="submit" className="btn admin-primary" disabled={busy || needOpponent}>
@@ -143,7 +160,7 @@ export function MatchesSection({ data, teamId, opponents, onOpenMatch }: Props) 
             setPointsText(String(DEFAULT_SET_POINTS))
           }}
         >
-          ＋ 試合・練習を作る
+          ＋ 試合・練習・紅白戦を作る
         </button>
       )}
 
@@ -152,12 +169,34 @@ export function MatchesSection({ data, teamId, opponents, onOpenMatch }: Props) 
         {matches?.map((m) => (
           <li key={m.id}>
             <span className="admin-grow">
-              {m.kind === 'practice' ? '練習' : opponentName(m.opponentId)}
+              {matchLabel(m, opponents)}
               <small>{[m.date, m.tournament].filter(Boolean).join(' · ')}</small>
             </span>
-            <button type="button" className="btn" onClick={() => onOpenMatch(m.id)}>
-              記録する
-            </button>
+            {confirmId === m.id ? (
+              <>
+                <span className="admin-error">セット・記録もすべて消えます。</span>
+                <button type="button" className="btn admin-danger" disabled={busy} onClick={() => onDelete(m.id)}>
+                  {busy ? '消しています…' : '削除する'}
+                </button>
+                <button type="button" className="btn" disabled={busy} onClick={() => setConfirmId(null)}>
+                  やめる
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="btn" onClick={() => onOpenMatch(m.id)}>
+                  記録する
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  aria-label={`${matchLabel(m, opponents)}（${m.date}）を削除`}
+                  onClick={() => setConfirmId(m.id)}
+                >
+                  削除
+                </button>
+              </>
+            )}
           </li>
         ))}
       </ul>
