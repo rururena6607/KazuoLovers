@@ -27,6 +27,7 @@ import {
   scopeOptions,
   splitPractice,
   serveTypeTable,
+  splitsOfSets,
   speedTable,
   type AnalysisData,
   type Scope,
@@ -124,6 +125,8 @@ export function AnalysisScreen({
     [kind, sets, data],
   )
   const matchLike = parts ? parts.scrimmage : sets
+  // セットごとの列の境目（F-24）。相手コートのゾーンの計算に使う
+  const splitsOf = useMemo(() => splitsOfSets(data.gameSets), [data.gameSets])
   // タブを切り替えても、範囲の集計はやり直さない。表示用の値は、記録・タブ・選手が変わったときだけ作る
   const overview = useMemo(
     () => ({
@@ -131,9 +134,9 @@ export function AnalysisScreen({
         parts && tab === 'attack'
           ? attackMetricsForScrimmage(overallMetrics(tab, matchLike))
           : overallMetrics(tab, matchLike),
-      heat: tab === 'attack' ? null : heatmap(tab, matchLike),
-      course: tab === 'attack' ? null : courseHeatmap(tab, matchLike),
-      dig: tab === 'reception' ? digView(matchLike) : null,
+      heat: tab === 'attack' ? null : heatmap(tab, matchLike, splitsOf),
+      course: tab === 'attack' ? null : courseHeatmap(tab, matchLike, splitsOf),
+      dig: tab === 'reception' ? digView(matchLike, splitsOf) : null,
       types: tab === 'serve' ? serveTypeTable(parts ? parts.scrimmageForTypes : matchLike) : null,
       // 紅白戦のアタックは、Bチームに被ブロックの記録がないので、速さ別の表も効果率と失点を除く
       speed: ((t) => (t && parts && tab === 'attack' ? attackTableForScrimmage(t) : t))(speedTable(tab, matchLike)),
@@ -142,7 +145,7 @@ export function AnalysisScreen({
           ? attackTableForScrimmage(playerTable(tab, matchLike, data.players))
           : playerTable(tab, matchLike, data.players),
     }),
-    [tab, matchLike, data.players, parts],
+    [tab, matchLike, data.players, parts, splitsOf],
   )
   const practice = useMemo(
     () => (parts ? practiceView(parts.drill, data.players) : null),

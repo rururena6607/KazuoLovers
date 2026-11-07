@@ -97,3 +97,21 @@ describe('digOriginShare（打ってくる位置。相手コート）', () => {
     expect(share.zones.get(6)).toEqual({ count: 1, share: 25 })
   })
 })
+
+describe('digOriginShare：セットごとの列の境目（F-24）', () => {
+  // 相手コートのネット側の列：左から 2・3・4。x = 0.3 は、3 等分なら左の列（2）、境目 [0.2, 0.8] なら中の列（3）
+  const records = [
+    { ...opp('A', { fromX: 0.3, fromY: 0.1 }), setId: 's1' },
+    { ...opp('A', { fromX: 0.3, fromY: 0.1 }), setId: 's2' },
+  ]
+  const splitsOf = (setId: string) => (setId === 's1' ? ([0.2, 0.8] as const) : undefined)
+
+  it('境目のあるセットはその境目で、ないセットは 3 等分で数える', () => {
+    const share = digOriginShare(records, zoneOf, splitsOf)
+    expect(share.zones.get(3)).toEqual({ count: 1, share: 50 })
+    expect(share.zones.get(2)).toEqual({ count: 1, share: 50 })
+  })
+  it('splitsOf を渡さなければ 3 等分（どちらも左の列）', () => {
+    expect(digOriginShare(records, zoneOf).zones.get(2)).toEqual({ count: 2, share: 100 })
+  })
+})

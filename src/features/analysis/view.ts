@@ -39,6 +39,7 @@ import {
   serveStatsByType,
   serveStatsOf,
   type PracticeStats,
+  type SplitsOf,
 } from '../../lib/stats/index.ts'
 import { formatRate, formatZoneCell, isNegativeShown, isReference } from './format.ts'
 
@@ -53,6 +54,19 @@ export interface AnalysisData {
    * なければ（またはBチームの選手がいなければ）、紅白戦はAチーム側の記録だけで集計する
    */
   opponentPlayers?: readonly OpponentPlayer[]
+}
+
+/**
+ * セットごとの列の境目（F-24）。GameSet の colSplit1・colSplit2 が両方あるセットだけ、その値を返す。
+ * 相手コートのゾーンを使う集計（着弾ゾーン別・コース割合・相手のスパイクの打つ位置）に、この関数を渡す。
+ * 正しくない値（0 ≤ 左 < 右 ≤ 1 でない）は、lib/court の zoneOf が 3 等分に戻す
+ */
+export function splitsOfSets(gameSets: readonly GameSet[]): SplitsOf {
+  const bySet = new Map<string, readonly [number, number]>()
+  for (const gs of gameSets) {
+    if (gs.colSplit1 !== undefined && gs.colSplit2 !== undefined) bySet.set(gs.id, [gs.colSplit1, gs.colSplit2])
+  }
+  return (setId) => bySet.get(setId)
 }
 
 /**
@@ -399,9 +413,13 @@ function makeHeatmap(side: Heatmap['side'], metric: string, values: ZoneValue[])
  * アタックのヒートマップはない（着弾点は任意項目で、F-11 にも求められていない）。
  * 6 ゾーンすべてを返す（lib/stats が 0 本のゾーンも入れる）
  */
-export function heatmap(tab: 'serve' | 'reception', sets: readonly SetRecords[]): Heatmap {
+export function heatmap(
+  tab: 'serve' | 'reception',
+  sets: readonly SetRecords[],
+  splitsOf?: SplitsOf,
+): Heatmap {
   if (tab === 'serve') {
-    const by = serveStatsByLandingZone(flat.serves(sets), zoneOf)
+    const by = serveStatsByLandingZone(flat.serves(sets), zoneOf, splitsOf)
     return makeHeatmap(
       'opponent',
       'サーブ効果率',
@@ -422,10 +440,14 @@ export function heatmap(tab: 'serve' | 'reception', sets: readonly SetRecords[])
  * レシーブ：自コートの受けた位置別（相手がどこに打ってくるか）。アタックにはない。
  * セルの本数はそのゾーンの本数で、10 本未満には「*」を付ける（ほかのヒートマップと同じ決まり）
  */
-export function courseHeatmap(tab: 'serve' | 'reception', sets: readonly SetRecords[]): Heatmap {
+export function courseHeatmap(
+  tab: 'serve' | 'reception',
+  sets: readonly SetRecords[],
+  splitsOf?: SplitsOf,
+): Heatmap {
   const share =
     tab === 'serve'
-      ? serveLandingShare(flat.serves(sets), zoneOf)
+      ? serveLandingShare(flat.serves(sets), zoneOf, splitsOf)
       : receptionPositionShare(flat.receptions(sets), zoneOf)
   return makeHeatmap(
     tab === 'serve' ? 'opponent' : 'own',
@@ -456,11 +478,11 @@ export interface DigView {
  * 拾えた率 = 拾えた（A〜D）÷（拾えた ＋ 拾えず）。相手ミスは分母に入れない（分母の本数が 10 本未満なら「*」）。
  * 位置の割合は、位置を記録した本数に対するそのゾーンの割合
  */
-export function digView(sets: readonly SetRecords[]): DigView {
+export function digView(sets: readonly SetRecords[], splitsOf?: SplitsOf): DigView {
   const records = sets.flatMap((s) => s.oppAttacks ?? [])
   const stats = digStatsOf(records)
   const landing = digLandingShare(records, zoneOf)
-  const origin = digOriginShare(records, zoneOf)
+  const origin = digOriginShare(records, zoneOf, splitsOf)
   const toValues = (share: typeof landing): ZoneValue[] =>
     [...share.zones].map(([zone, z]) => ({ zone, value: z.share, count: z.count }))
   return {

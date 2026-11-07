@@ -22,6 +22,7 @@ import {
   scopeOptions,
   serveTypeTable,
   speedTable,
+  splitsOfSets,
   splitPractice,
   attackTableForScrimmage,
   type AnalysisData,
@@ -612,5 +613,38 @@ describe('紅白戦：Bチームの部員（5 章「紅白戦の個人成績」�
     })
     expect(t.columns).toEqual(['打数', 'アタック決定率'])
     expect(t.rows[0]?.cells.map((c) => c.text)).toEqual(['1', '2'])
+  })
+})
+
+describe('セットごとの列の境目を分析に渡す（F-24）', () => {
+  // 相手コートの奥の列は左から 1・6・5。x = 0.35 は、3 等分なら中の列（6）、境目 [0.4, 0.8] なら左の列（1）
+  const gs = (id: string, o: Partial<GameSet> = {}): GameSet => ({ ...gameSet(id, 'm1', 1), ...o })
+  const sets: SetRecords[] = [
+    { ...empty('s1'), serves: [serve({ setId: 's1', toX: 0.35, toY: 0.9 })] },
+    { ...empty('s2'), serves: [serve({ setId: 's2', toX: 0.35, toY: 0.9 })] },
+  ]
+  const zoneText = (h: ReturnType<typeof heatmap>, zone: number) => h.cells.find((c) => c.zone === zone)?.text
+
+  it('splitsOfSets：両方そろっているセットだけ境目を返す', () => {
+    const splitsOf = splitsOfSets([gs('s1', { colSplit1: 0.4, colSplit2: 0.8 }), gs('s2'), gs('s3', { colSplit1: 0.4 })])
+    expect(splitsOf('s1')).toEqual([0.4, 0.8])
+    expect(splitsOf('s2')).toBeUndefined()
+    expect(splitsOf('s3')).toBeUndefined() // 片方だけは使わない
+    expect(splitsOf('none')).toBeUndefined()
+  })
+  it('コース割合：境目のあるセットは左の列(1)、ないセットは中の列(6)', () => {
+    const splitsOf = splitsOfSets([gs('s1', { colSplit1: 0.4, colSplit2: 0.8 }), gs('s2')])
+    const h = courseHeatmap('serve', sets, splitsOf)
+    expect(zoneText(h, 1)).toBe('50.0%*（1）')
+    expect(zoneText(h, 6)).toBe('50.0%*（1）')
+  })
+  it('ヒートマップ（サーブ効果率）も同じ境目で数える', () => {
+    const splitsOf = splitsOfSets([gs('s1', { colSplit1: 0.4, colSplit2: 0.8 }), gs('s2')])
+    const h = heatmap('serve', sets, splitsOf)
+    expect(h.cells.find((c) => c.zone === 1)?.count).toBe(1)
+    expect(h.cells.find((c) => c.zone === 6)?.count).toBe(1)
+  })
+  it('境目を渡さなければ、これまでどおり 3 等分', () => {
+    expect(zoneText(courseHeatmap('serve', sets), 6)).toBe('100.0%*（2）')
   })
 })
