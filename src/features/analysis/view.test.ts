@@ -13,6 +13,9 @@ import type {
 } from '../../contracts/index.ts'
 import {
   courseHeatmap,
+  filterByPlayer,
+  playerOptions,
+  serveScatter,
   digView,
   heatmap,
   overallMetrics,
@@ -646,5 +649,79 @@ describe('セットごとの列の境目を分析に渡す（F-24）', () => {
   })
   it('境目を渡さなければ、これまでどおり 3 等分', () => {
     expect(zoneText(courseHeatmap('serve', sets), 6)).toBe('100.0%*（2）')
+  })
+})
+
+describe('選手での絞り込みと着弾点の散布図（F-22、T-26）', () => {
+  // p7 のサーブ：着弾 (0.1, 0.9)・(0.5, 0.9)・ネット（着弾点なし）。p3 のサーブ：着弾 (0.9, 0.1)。p7 が 1 本受けた
+  const sets: SetRecords[] = [
+    {
+      ...empty('s1'),
+      serves: [
+        serve({ serverId: 'p7', toX: 0.1, toY: 0.9 }),
+        serve({ serverId: 'p7', toX: 0.5, toY: 0.9 }),
+        serve({ serverId: 'p7', toX: null, toY: null, result: 'miss', missType: 'net', reception: null }),
+        serve({ serverId: 'p3', toX: 0.9, toY: 0.1 }),
+      ],
+      receptions: [
+        {
+          kind: 'reception',
+          clientId: 'r1',
+          setId: 's1',
+          receiverId: 'p7',
+          oppServerId: null,
+          oppServeType: null,
+          atX: null,
+          atY: null,
+          result: 'A',
+          recordedAt: '2026-11-05T00:00:00Z',
+        },
+      ],
+    },
+  ]
+  const colors = new Map([
+    ['p7', '#1e3a8a'],
+    ['p3', '#0f766e'],
+  ])
+
+  it('playerOptions：記録のある選手を背番号順に。アタックにはない', () => {
+    expect(playerOptions('serve', sets, players)).toEqual([
+      { id: 'p3', label: '3 佐藤' },
+      { id: 'p7', label: '7 渡辺' },
+    ])
+    expect(playerOptions('reception', sets, players)).toEqual([{ id: 'p7', label: '7 渡辺' }])
+    expect(playerOptions('attack', sets, players)).toEqual([])
+  })
+  it('filterByPlayer：サーブはサーバー、レシーブはレシーバーで絞る。null は全員', () => {
+    expect(filterByPlayer('serve', sets, 'p3')[0]?.serves).toHaveLength(1)
+    expect(filterByPlayer('serve', sets, null)[0]?.serves).toHaveLength(4)
+    expect(filterByPlayer('reception', sets, 'p3')[0]?.receptions).toHaveLength(0)
+    expect(filterByPlayer('reception', sets, 'p7')[0]?.receptions).toHaveLength(1)
+    expect(filterByPlayer('attack', sets, 'p3')[0]?.serves).toHaveLength(4)
+  })
+  it('絞るとヒートマップの本数が絞られる（p7 の着弾 2 本 → 左奥(1)と中奥(6)に 1 本ずつ）', () => {
+    const h = heatmap('serve', filterByPlayer('serve', sets, 'p7'))
+    const count = (zone: number) => h.cells.find((c) => c.zone === zone)?.count
+    expect(count(1)).toBe(1)
+    expect(count(6)).toBe(1)
+    expect(count(4)).toBe(0) // p3 の着弾は入らない
+    expect(heatmap('serve', sets).cells.find((c) => c.zone === 4)?.count).toBe(1)
+  })
+  it('serveScatter：着弾点のある 3 本を、選手の色と背番号つきで。ネットは描かない', () => {
+    const sc = serveScatter(sets, players, colors)
+    expect(sc.marks).toEqual([
+      { x: 0.1, y: 0.9, color: '#1e3a8a', label: '7' },
+      { x: 0.5, y: 0.9, color: '#1e3a8a', label: '7' },
+      { x: 0.9, y: 0.1, color: '#0f766e', label: '3' },
+    ])
+    expect(sc.legend).toEqual([
+      { id: 'p3', label: '3 佐藤', color: '#0f766e' },
+      { id: 'p7', label: '7 渡辺', color: '#1e3a8a' },
+    ])
+  })
+  it('serveScatter：絞った記録なら、その選手の点だけ', () => {
+    const sc = serveScatter(filterByPlayer('serve', sets, 'p3'), players, colors)
+    expect(sc.marks).toHaveLength(1)
+    expect(sc.legend.map((l) => l.id)).toEqual(['p3'])
   })
 })

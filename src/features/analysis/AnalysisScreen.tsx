@@ -3,13 +3,16 @@ import { MIN_SAMPLE } from '../../contracts/index.ts'
 import type { AiReports } from '../../lib/data/aiReport.ts'
 import './analysis.css'
 import { AiCommentPanel } from './AiCommentPanel.tsx'
+import { playerColorMap } from '../../components/playerColors.ts'
 import { Heatmap } from './Heatmap.tsx'
+import { ScatterPlot } from './ScatterPlot.tsx'
 import { ScoreTrend, SetResults } from './SetResults.tsx'
 import { MetricRow, StatTable } from './StatTable.tsx'
 import { emptySet, scoreTrend, setResults } from './setResults.ts'
 import {
   COURSE_NOTES,
   DIG_NOTE,
+  SCATTER_NOTE,
   SCRIMMAGE_ATTACK_NOTE,
   SCRIMMAGE_NOTE,
   SCRIMMAGE_RECEPTION_NOTE,
@@ -19,12 +22,15 @@ import {
   attackTableForScrimmage,
   courseHeatmap,
   digView,
+  filterByPlayer,
   heatmap,
   overallMetrics,
+  playerOptions,
   playerTable,
   practiceView,
   recordsInScope,
   scopeOptions,
+  serveScatter,
   splitPractice,
   serveTypeTable,
   splitsOfSets,
@@ -99,6 +105,8 @@ export function AnalysisScreen({
     initialScope ? { [initialScope.kind]: targetOf(initialScope) } : {},
   )
   const [tab, setTab] = useState<Tab>('serve')
+  /** ヒートマップ・コース割合・散布図を絞る選手の id。'' は全員（F-22） */
+  const [playerFilter, setPlayerFilter] = useState('')
 
   const pickable = kind === 'match' || kind === 'set' || kind === 'opponent'
   const options = useMemo(() => (pickable ? scopeOptions(kind, data) : []), [pickable, kind, data])
@@ -127,6 +135,17 @@ export function AnalysisScreen({
   const matchLike = parts ? parts.scrimmage : sets
   // セットごとの列の境目（F-24）。相手コートのゾーンの計算に使う
   const splitsOf = useMemo(() => splitsOfSets(data.gameSets), [data.gameSets])
+  // 選手での絞り込み（F-22）。範囲やタブを変えて、選んだ選手の記録がなくなったら全員に戻す
+  const playerChoices = useMemo(
+    () => playerOptions(tab, matchLike, data.players),
+    [tab, matchLike, data.players],
+  )
+  const filterId = playerChoices.some((o) => o.id === playerFilter) ? playerFilter : ''
+  const filtered = useMemo(
+    () => filterByPlayer(tab, matchLike, filterId === '' ? null : filterId),
+    [tab, matchLike, filterId],
+  )
+  const colors = useMemo(() => playerColorMap(data.players), [data.players])
   // タブを切り替えても、範囲の集計はやり直さない。表示用の値は、記録・タブ・選手が変わったときだけ作る
   const overview = useMemo(
     () => ({
@@ -134,8 +153,9 @@ export function AnalysisScreen({
         parts && tab === 'attack'
           ? attackMetricsForScrimmage(overallMetrics(tab, matchLike))
           : overallMetrics(tab, matchLike),
-      heat: tab === 'attack' ? null : heatmap(tab, matchLike, splitsOf),
-      course: tab === 'attack' ? null : courseHeatmap(tab, matchLike, splitsOf),
+      heat: tab === 'attack' ? null : heatmap(tab, filtered, splitsOf),
+      course: tab === 'attack' ? null : courseHeatmap(tab, filtered, splitsOf),
+      scatter: tab === 'serve' ? serveScatter(filtered, data.players, colors) : null,
       dig: tab === 'reception' ? digView(matchLike, splitsOf) : null,
       types: tab === 'serve' ? serveTypeTable(parts ? parts.scrimmageForTypes : matchLike) : null,
       // 紅白戦のアタックは、Bチームに被ブロックの記録がないので、速さ別の表も効果率と失点を除く
@@ -145,7 +165,7 @@ export function AnalysisScreen({
           ? attackTableForScrimmage(playerTable(tab, matchLike, data.players))
           : playerTable(tab, matchLike, data.players),
     }),
-    [tab, matchLike, data.players, parts, splitsOf],
+    [tab, matchLike, filtered, data.players, parts, splitsOf, colors],
   )
   const practice = useMemo(
     () => (parts ? practiceView(parts.drill, data.players) : null),
@@ -215,6 +235,21 @@ export function AnalysisScreen({
 
           {results && <SetResults table={results} onSelect={openSet} />}
           <MetricRow metrics={overview.metrics} />
+          {playerChoices.length > 0 && (
+            <select
+              className="an-select"
+              aria-label="選手で絞り込み"
+              value={filterId}
+              onChange={(e) => setPlayerFilter(e.target.value)}
+            >
+              <option value="">全員</option>
+              {playerChoices.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
           {overview.heat && <Heatmap map={overview.heat} />}
           {overview.course && (
             <>
@@ -230,6 +265,12 @@ export function AnalysisScreen({
               <Heatmap map={overview.dig.origin} />
               <p className="an-note">{DIG_NOTE}</p>
             </section>
+          )}
+          {overview.scatter && (
+            <>
+              <ScatterPlot scatter={overview.scatter} />
+              <p className="an-note">{SCATTER_NOTE}</p>
+            </>
           )}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
           {overview.speed && (
