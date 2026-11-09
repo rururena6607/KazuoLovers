@@ -119,3 +119,10 @@
   color: var(--ink);
   font-size: 16px; /* 16px 未満だと iPhone が入力のたびに拡大する */
 }
+
+/* iPad の横向き：62dvh だと下のボタンがタブバーに隠れるので、上下のボタンの分（360px）を引いた高さに収める */
+@media (min-width: 700px) and (orientation: landscape) {
+  .board-court {
+    max-height: max(280px, calc(100dvh - 360px));
+  }
+}
