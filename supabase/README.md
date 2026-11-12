@@ -106,7 +106,7 @@ SMTP を保存すると、「Authentication → Emails → Templates」の件名
 
 - 署名（`x-line-signature`）を確かめ、LINE からのリクエストだけを受け付ける
 - Bot をグループに招待すると、そのグループを `LINE_TEAM_ID` のチームにつなぐ（`teams.line_group_id`）。**つなげるのは最初の1グループだけ**で、ほかのグループに招待されてもチームのデータは返さない。つなぎ直すときは Table Editor で `teams.line_group_id` を空にしてから招待し直す
-- 「結果」：最新の試合（練習は除く）のセットごとの得点と、保存済みの AI コメント（`match:<試合の id>`）。Gemini は待たない
+- 「結果」：最新の試合（練習は除く）のセットごとの得点と、保存済みの AI コメント（`match:<試合の id>`）。Claude API は待たない
 - 「7番」「#7」：その選手の最新の試合の本数。指標は T-34 で足す
 
 ### 1. LINE のチャネルを作る
@@ -158,19 +158,23 @@ npx supabase functions deploy line-push --project-ref （プロジェクトの I
 
 テストで1回送ったら、LINE Official Account Manager の「利用状況」で、何通と数えられたかを確かめる（要件定義書 11 章の確認事項）。
 
-## AI コメント（T-30、gemini-report）
+## AI コメント（T-30、ai-report）
 
-分析画面から集計（背番号と数値だけ）を受け取り、Gemini のコメントを返して `ai_reports` に残す Edge Function。コードは `functions/gemini-report/`（`index.ts` と `logic.ts` の2つ）。
+分析画面から集計（背番号と数値だけ）を受け取り、Claude API（Claude Sonnet 5.5）のコメントを返して `ai_reports` に残す Edge Function。コードは `functions/ai-report/`（`index.ts` と `logic.ts` の2つ）。以前は Gemini を使う `gemini-report` だった（要件定義書 8 章）。
 
 - ログインした部員だけが、自分のチームについて呼べる
-- 同じ範囲（scope）で同じ集計なら、保存済みのコメントを返す（Gemini を呼ばない）
-- 集計に選手の名前や `name` などのキーが入っていたら、Gemini に送らずに断る
+- 同じ範囲（scope）で同じ集計なら、保存済みのコメントを返す（Claude API を呼ばない。料金の節約）
+- 集計に選手の名前や `name` などのキーが入っていたら、Claude API に送らずに断る
 - 1チームが1日に作れるのは 20 回まで（保存済みを返すときは数えない）
+- 安全のための判定で断られたときは、サーバー側でほかのモデルに替えて作り直す（`fallbacks: "default"`）
 
-### 1. Gemini の API キーを作る
+Claude API には無料枠がない。1回（入力約5千・出力約2千トークン）で約0.03ドル、月100回で約3ドル。AI が考える分（thinking）も出力として数えられるので、実際は少し多くなる。1日 20 回の上限いっぱいに使うと月に最大約600回（約20ドル）になりうるので、Console の月の上限で止める（上限に達すると、AI コメントはエラーになる）。
 
-1. **学校のアドレスで** https://aistudio.google.com を開く
-2. 「Get API key」→「Create API key」でキーを作る。キーはどこにも貼らない（コード・コミット・チャット）
+### 1. Claude API のキーを作る
+
+1. **学校のアドレスで** https://platform.claude.com （Anthropic Console）にアカウントを作る
+2. 「Billing」でクレジットを買い、「Limits」で月の使用上限（例：10ドル）を決めておく
+3. 「API Keys」でキーを作る。キーはどこにも貼らない（コード・コミット・チャット）
 
 ### 2. シークレットを入れる
 
@@ -178,11 +182,11 @@ Supabase の「Edge Functions → Secrets」で、次を足す。
 
 | 名前 | 値 |
 | --- | --- |
-| `GEMINI_API_KEY` | 1 で作ったキー |
-| `GEMINI_MODEL`（任意） | 使うモデル。入れなければ `gemini-2.5-flash`。AI Studio で無料枠の Flash 系の名前を確かめ、変わっていたら入れる |
+| `ANTHROPIC_API_KEY` | 1 で作ったキー |
+| `CLAUDE_MODEL`（任意） | 使うモデル。入れなければ `claude-sonnet-5-5` |
 | `AI_DAILY_LIMIT`（任意） | 1日の回数の上限。入れなければ 20 |
 
-`SUPABASE_URL`・`SUPABASE_ANON_KEY`・`SUPABASE_SERVICE_ROLE_KEY` は Supabase が自動で入れるので、足さない。
+`SUPABASE_URL`・`SUPABASE_ANON_KEY`・`SUPABASE_SERVICE_ROLE_KEY` は Supabase が自動で入れるので、足さない。前の `GEMINI_API_KEY`・`GEMINI_MODEL` は使わないので、移ったあとに消す。
 
 ### 3. 配る（デプロイ）
 
@@ -190,10 +194,12 @@ Supabase CLI を入れなくても、`npx` で配れる（Docker は要らない
 
 ```
 npx supabase login
-npx supabase functions deploy gemini-report --project-ref （プロジェクトの ID） --use-api
+npx supabase functions deploy ai-report --project-ref （プロジェクトの ID） --use-api
 ```
 
-プロジェクトの ID は、Project URL の `https://（ここ）.supabase.co` の部分。配ったら「Edge Functions → gemini-report」の **Verify JWT** がオンになっていることを確かめる（ログインしていない人は呼べない）。
+プロジェクトの ID は、Project URL の `https://（ここ）.supabase.co` の部分。配ったら「Edge Functions → ai-report」の **Verify JWT** がオンになっていることを確かめる（ログインしていない人は呼べない）。
+
+**アプリを配る（main をマージする）前に、`ai-report` を配る。** アプリは `ai-report` を呼ぶので、先にマージすると AI コメントが「見つからない」エラーになる。移ったら、古い `gemini-report` はダッシュボードで消す。
 
 ### 4. 確かめる
 
@@ -204,7 +210,7 @@ const { aiReports } = await import('/src/lib/data/aiReport.ts')
 await aiReports.request({ teamId: '（チームの id）', scope: 'test', summary: { minSample: 10, serve: { total: { attempts: 12, efficiency: 10.0, reference: false } } } })
 ```
 
-2回目は `cached: true` になる。エラーは「Edge Functions → gemini-report → Logs」で見る。
+2回目は `cached: true` になる。エラーは「Edge Functions → ai-report → Logs」で見る。
 
 ## キーの置き場所
 
@@ -212,5 +218,5 @@ await aiReports.request({ teamId: '（チームの id）', scope: 'test', summar
 | --- | --- |
 | Project URL、anon キー | `.env.local`（手元）と Vercel の環境変数。ブラウザに出てもよい |
 | service_role キー | どこにも置かない。Edge Functions では自動で使える |
-| Gemini・LINE のキー | Edge Functions のシークレット（Gemini は T-30、LINE は T-33） |
+| Claude API・LINE のキー | Edge Functions のシークレット（Claude API は T-30、LINE は T-33） |
 | SMTP のパスワード（Gmail のアプリ パスワード、Brevo の SMTP キー） | Supabase の SMTP Settings にだけ入れる（T-03） |

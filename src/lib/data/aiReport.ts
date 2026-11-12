@@ -1,5 +1,5 @@
-// AI コメント（T-30、F-13）。分析画面（T-32）はこれを使い、Gemini を直接呼ばない。
-// 集計の JSON（lib/stats の buildAiSummary、T-31）を Edge Function の gemini-report に送る。
+// AI コメント（T-30、F-13）。分析画面（T-32）はこれを使い、Claude API を直接呼ばない。
+// 集計の JSON（lib/stats の buildAiSummary、T-31）を Edge Function の ai-report に送る。
 // 範囲（scope）の名前は、画面の範囲の選択と同じにする。例：match:<試合の id>、set:<セットの id>、
 // opponent:<相手の id>、practice:<試合の id>、all。同じ範囲で同じ集計なら、保存済みのコメントが返る。
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -7,7 +7,7 @@ import { getSupabase } from './supabaseClient.ts'
 
 export interface AiComment {
   comment: string
-  /** true なら、保存済みのコメント（Gemini は呼んでいない） */
+  /** true なら、保存済みのコメント（Claude API は呼んでいない） */
   cached: boolean
   /** ISO 8601 */
   createdAt: string
@@ -30,7 +30,7 @@ export interface AiReports {
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 
-/** Edge Function の失敗を、画面に出せる日本語にする。gemini-report は { error } を返す */
+/** Edge Function の失敗を、画面に出せる日本語にする。ai-report は { error } を返す */
 export async function errorMessageOf(error: unknown): Promise<string> {
   const context = isRecord(error) ? error.context : undefined
   if (context instanceof Response) {
@@ -47,7 +47,7 @@ export async function errorMessageOf(error: unknown): Promise<string> {
   return 'AI のコメントを作れませんでした。'
 }
 
-/** gemini-report の応答を確かめる */
+/** ai-report の応答を確かめる */
 export function toAiComment(data: unknown): AiComment | null {
   if (!isRecord(data)) return null
   const { comment, cached, createdAt } = data
@@ -59,7 +59,7 @@ export function toAiComment(data: unknown): AiComment | null {
 export function createAiReports(getClient: () => SupabaseClient): AiReports {
   return {
     async request({ teamId, scope, summary, force = false }) {
-      const { data, error } = await getClient().functions.invoke('gemini-report', {
+      const { data, error } = await getClient().functions.invoke('ai-report', {
         body: { teamId, scope, summary, force },
       })
       if (error) throw new Error(await errorMessageOf(error))

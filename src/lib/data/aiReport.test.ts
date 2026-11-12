@@ -1,13 +1,13 @@
-// Edge Function gemini-report（supabase/functions）の純粋な処理と、画面側の受け取り（aiReport.ts）のテスト。
+// Edge Function ai-report（supabase/functions）の純粋な処理と、画面側の受け取り（aiReport.ts）のテスト。
 import { describe, expect, it } from 'vitest'
 import {
   buildPrompt,
   canonicalJson,
-  commentFromGemini,
+  commentFromClaude,
   findPersonalData,
   parseRequest,
   startOfDayJst,
-} from '../../../supabase/functions/gemini-report/logic.ts'
+} from '../../../supabase/functions/ai-report/logic.ts'
 import { errorMessageOf, toAiComment } from './aiReport.ts'
 
 const TEAM = '11111111-2222-4333-8444-555555555555'
@@ -47,7 +47,7 @@ describe('parseRequest', () => {
   })
 })
 
-describe('findPersonalData（名前を Gemini に送らない）', () => {
+describe('findPersonalData（名前を Claude API に送らない）', () => {
   it('背番号と数値だけなら通す', () => {
     expect(findPersonalData(summary, ['渡辺', '佐藤'])).toBeNull()
   })
@@ -86,13 +86,26 @@ describe('buildPrompt', () => {
   })
 })
 
-describe('commentFromGemini', () => {
-  it('最初の候補の文をつなげる。なければ null', () => {
-    const res = { candidates: [{ content: { parts: [{ text: '【良かった点】\n' }, { text: '- #7 のサーブ' }] } }] }
-    expect(commentFromGemini(res)).toBe('【良かった点】\n- #7 のサーブ')
-    expect(commentFromGemini({ candidates: [] })).toBeNull()
-    expect(commentFromGemini({ candidates: [{ content: { parts: [{ text: '  ' }] } }] })).toBeNull()
-    expect(commentFromGemini('x')).toBeNull()
+describe('commentFromClaude', () => {
+  it('text のブロックだけをつなげる（thinking・fallback は使わない）', () => {
+    const res = {
+      stop_reason: 'end_turn',
+      content: [
+        { type: 'thinking', thinking: '' },
+        { type: 'text', text: '【良かった点】\n' },
+        { type: 'text', text: '- #7 のサーブ' },
+      ],
+    }
+    expect(commentFromClaude(res)).toBe('【良かった点】\n- #7 のサーブ')
+  })
+
+  it('断られた・途中で切れた・空・形が違うときは null', () => {
+    const text = [{ type: 'text', text: '【課題】' }]
+    expect(commentFromClaude({ stop_reason: 'refusal', content: text })).toBeNull()
+    expect(commentFromClaude({ stop_reason: 'max_tokens', content: text })).toBeNull()
+    expect(commentFromClaude({ stop_reason: 'end_turn', content: [{ type: 'text', text: '  ' }] })).toBeNull()
+    expect(commentFromClaude({ stop_reason: 'end_turn', content: [] })).toBeNull()
+    expect(commentFromClaude('x')).toBeNull()
   })
 })
 

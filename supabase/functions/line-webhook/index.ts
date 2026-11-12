@@ -64,7 +64,7 @@ async function resultTexts(): Promise<string[]> {
       .from('points')
       .select('set_id,our_score,opp_score,recorded_at')
       .in('set_id', sets.map((s) => s.id)),
-    // Gemini の応答は待たず、保存済みのコメントを返す（返信は1分以内）
+    // Claude API の応答は待たず、保存済みのコメントを返す（返信は1分以内）
     db
       .from('ai_reports')
       .select('comment')

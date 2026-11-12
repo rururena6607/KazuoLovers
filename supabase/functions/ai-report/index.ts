@@ -1,14 +1,16 @@
-// gemini-report（T-30、F-13）：分析画面から集計の JSON を受け取り、Gemini のコメントを返して ai_reports に残す。
+// ai-report（T-30、F-13）：分析画面から集計の JSON を受け取り、Claude API のコメントを返して ai_reports に残す。
 // - ログインした部員だけが、自分のチームについて呼べる（RLS で確かめる）
-// - 同じ範囲で同じ集計なら、保存済みのコメントを返す（無料枠の節約）
+// - 同じ範囲で同じ集計なら、保存済みのコメントを返す（料金の節約）
 // - 選手の名前が入っていたら送らない
-// 秘密情報（GEMINI_API_KEY）は Edge Functions のシークレットに置く。配り方は supabase/README.md。
+// 秘密情報（ANTHROPIC_API_KEY）は Edge Functions のシークレットに置く。配り方は supabase/README.md。
+import Anthropic from 'npm:@anthropic-ai/sdk@1.3.0'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import {
+  buildPrompt,
   canonicalJson,
-  commentFromGemini,
+  commentFromClaude,
+  DEFAULT_CLAUDE_MODEL,
   findPersonalData,
-  geminiRequestBody,
   parseRequest,
   startOfDayJst,
 } from './logic.ts'
@@ -16,9 +18,9 @@ import {
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
-/** 無料枠で使える Flash 系のモデル。名前が変わったらシークレットで替える */
-const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash'
+const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+/** 要件定義書 8 章のモデル。替えるときはシークレットで替える */
+const CLAUDE_MODEL = Deno.env.get('CLAUDE_MODEL') ?? DEFAULT_CLAUDE_MODEL
 /** 1チームが1日に作れるコメントの数（保存済みを返すときは数えない） */
 const DAILY_LIMIT = Number(Deno.env.get('AI_DAILY_LIMIT') ?? '20')
 
@@ -39,7 +41,7 @@ const fail = (status: number, error: string) => json(status, { error })
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return fail(405, 'POST で送ってください。')
-  if (!GEMINI_API_KEY) return fail(500, 'GEMINI_API_KEY が設定されていません。')
+  if (!ANTHROPIC_API_KEY) return fail(500, 'ANTHROPIC_API_KEY が設定されていません。')
 
   const authorization = req.headers.get('Authorization')
   if (!authorization) return fail(401, 'ログインしてください。')
@@ -100,24 +102,34 @@ Deno.serve(async (req) => {
 
   let comment: string | null
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
-        body: JSON.stringify(geminiRequestBody(summary)),
-        signal: AbortSignal.timeout(45_000),
-      },
-    )
-    if (res.status === 429) return fail(429, 'Gemini の無料枠の回数を超えました。しばらく待ってください。')
-    if (!res.ok) {
-      console.error('Gemini', res.status, await res.text())
-      return fail(502, 'AI のコメントを作れませんでした。')
+    // 再試行はしない（時間切れのあとに作り直すと、料金を二重に払う）。Edge Function の上限（150 秒）に収める
+    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY, timeout: 90_000, maxRetries: 0 })
+    const { system, user } = buildPrompt(summary)
+    const response = await anthropic.beta.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 16000,
+      // 600 字ほどのコメントなので、考える量は中くらいにする
+      output_config: { effort: 'medium' },
+      // 安全のための判定で断られたら、サーバー側でほかのモデルに替えて作り直す
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      system,
+      messages: [{ role: 'user', content: user }],
+    })
+    comment = commentFromClaude(response)
+    if (!comment) console.error('Claude', response.stop_reason, response.stop_details)
+    if (response.stop_reason === 'refusal') {
+      return fail(502, 'AI がこの内容へのコメントを断りました。範囲を変えて試してください。')
     }
-    comment = commentFromGemini(await res.json())
   } catch (e) {
-    console.error('Gemini', e)
-    return fail(504, 'AI の応答が遅いので、やめました。もう一度試してください。')
+    console.error('Claude', e)
+    if (e instanceof Anthropic.RateLimitError || (e instanceof Anthropic.APIError && e.status === 529)) {
+      return fail(429, 'AI が混み合っています。しばらく待ってから、もう一度試してください。')
+    }
+    if (e instanceof Anthropic.APIConnectionTimeoutError) {
+      return fail(504, 'AI の応答が遅いので、やめました。もう一度試してください。')
+    }
+    return fail(502, 'AI のコメントを作れませんでした。')
   }
   if (!comment) return fail(502, 'AI のコメントが空でした。もう一度試してください。')
 
