@@ -70,6 +70,7 @@ export function Shell({ b }: { b: Backend }) {
         loadTeam={b.loadTeam}
         active={tab === 'analysis'}
         onChooseMatch={() => select('admin')}
+        aiReports={b.kind === 'supabase' ? b.aiReports : undefined}
       />
     ),
     board: <BoardTab loadTeam={b.loadTeam} active={tab === 'board'} />,
