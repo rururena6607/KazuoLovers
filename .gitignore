@@ -8,3 +8,5 @@ dist
 coverage
 .vercel
 *.tsbuildinfo
+# Supabase CLI が作る一時ファイル（プロジェクトの ID など）
+supabase/.temp/
