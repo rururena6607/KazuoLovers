@@ -7,13 +7,33 @@ import '../admin/admin.css'
 
 interface Props {
   data: TeamData
-  code: string
+  /** 招待リンクのコード。リンクが途中で切れているなど、読めなければ null */
+  code: string | null
   onClose: () => void
 }
 
 const dropInviteFromUrl = () => window.history.replaceState(null, '', urlWithoutInvite(window.location.href))
 
 export function InviteLanding({ data, code, onClose }: Props) {
+  const close = () => {
+    dropInviteFromUrl()
+    onClose()
+  }
+
+  if (code === null) {
+    return (
+      <div className="admin">
+        <h1>チームへの招待</h1>
+        <p className="admin-error" role="alert">
+          招待リンクが正しくありません（途中で切れているかもしれません）。管理者に、リンクをもう一度送ってもらってください。
+        </p>
+        <button type="button" className="btn" onClick={close}>
+          閉じる
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="admin">
       <h1>チームへの招待</h1>
@@ -24,10 +44,7 @@ export function InviteLanding({ data, code, onClose }: Props) {
           dropInviteFromUrl()
           window.location.reload()
         }}
-        onCancel={() => {
-          dropInviteFromUrl()
-          onClose()
-        }}
+        onCancel={close}
       />
     </div>
   )

@@ -34,6 +34,8 @@ export function InviteSection({ data, teamId }: Props) {
   const copyLink = () => {
     if (!link) return
     void run(async () => {
+      // HTTPS でないページや、アプリの中のブラウザでは使えないことがある
+      if (!navigator.clipboard) throw new Error('この画面ではコピーできません。リンクの欄を長押しして、コピーしてください。')
       await navigator.clipboard.writeText(link)
       setCopied(true)
     })

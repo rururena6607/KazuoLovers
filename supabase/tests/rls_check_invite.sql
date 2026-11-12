@@ -1,5 +1,5 @@
 -- T-43 の確認：招待コードの発行・参加と、参加で前のチームから抜ける・消える動き
--- 20261112000000_invite_code.sql を流したあとに、Supabase の SQL Editor に貼って実行する。
+-- 20261112000000_invite_code.sql と 20261112010000_invite_code_fix.sql を流したあとに、Supabase の SQL Editor に貼って実行する。
 -- 最後に rollback するので、データは残らない。成功すると「T-43 OK」と表示される。
 
 begin;
@@ -24,6 +24,17 @@ insert into public.team_members (team_id, user_id, role) values
   ('10000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-0000000000e2', 'admin');
 insert into public.players (id, team_id, number, name) values
   ('20000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', 7, 'Aの選手');
+-- チームA には記録もある（記録が選手を参照していても、チームを消せることを確かめる）
+insert into public.matches (id, team_id, kind) values
+  ('30000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-00000000000a', 'practice');
+insert into public.sets (id, match_id, set_no) values
+  ('40000000-0000-0000-0000-00000000000a', '30000000-0000-0000-0000-00000000000a', 1);
+insert into public.serves (client_id, set_id, server_id, serve_type, result, recorded_at) values
+  (gen_random_uuid(), '40000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-00000000000a', 'float', 'in', now());
+insert into public.receptions (client_id, set_id, receiver_id, result, recorded_at) values
+  (gen_random_uuid(), '40000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-00000000000a', 'A', now());
+insert into public.attacks (client_id, set_id, attacker_id, result, recorded_at) values
+  (gen_random_uuid(), '40000000-0000-0000-0000-00000000000a', '20000000-0000-0000-0000-00000000000a', 'kill', now());
 
 set local role authenticated;
 
@@ -93,7 +104,8 @@ begin
     if sqlerrm like '確認7%' then raise; end if;
   end;
 
-  typed := lower(substr(current_setting('t43.code_b'), 1, 4) || '-' || substr(current_setting('t43.code_b'), 5));
+  -- 小文字、ハイフンに似た文字（‐ U+2010）、空白が入っていても見つかる
+  typed := lower(substr(current_setting('t43.code_b'), 1, 4) || '‐ ' || substr(current_setting('t43.code_b'), 5));
   p := public.preview_join(typed);
   if p->>'team_name' <> 'チームB' or p->'leaving' <> '[]'::jsonb or p->'deleting' <> '[]'::jsonb then
     raise exception '確認8 失敗：参加前の確認が違う（%）', p;
@@ -168,6 +180,10 @@ begin
   end if;
   if exists (select 1 from public.players where team_id = '10000000-0000-0000-0000-00000000000a') then
     raise exception '確認16 失敗：チームA の選手が残っている';
+  end if;
+  if exists (select 1 from public.matches where team_id = '10000000-0000-0000-0000-00000000000a')
+     or exists (select 1 from public.serves where set_id = '40000000-0000-0000-0000-00000000000a') then
+    raise exception '確認16 失敗：チームA の試合・記録が残っている';
   end if;
   if exists (select 1 from public.team_members where user_id = '00000000-0000-0000-0000-00000000000c') then
     raise exception '確認17 失敗：消えたチームの部員 c の所属が残っている';

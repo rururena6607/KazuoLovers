@@ -12,7 +12,7 @@ export function AuthGate({ auth, children }: { auth: Auth; children: ReactNode }
   // Supabase の確かめを待たず、端末に保ったログイン状態ですぐに出す。
   // 電波がないと、確かめが終わるまで30秒以上かかることがある
   const [session, setSession] = useState<AuthSession | null>(() => auth.current())
-  const [inviteCode, setInviteCode] = useState<string | null>(() => inviteCodeFromUrl(window.location.search))
+  const [invite, setInvite] = useState(() => inviteCodeFromUrl(window.location.search))
 
   useEffect(() => {
     try {
@@ -25,6 +25,6 @@ export function AuthGate({ auth, children }: { auth: Auth; children: ReactNode }
   }, [auth])
 
   if (session === null) return <LoginScreen auth={auth} />
-  if (inviteCode) return <InviteLanding data={teamData} code={inviteCode} onClose={() => setInviteCode(null)} />
+  if (invite) return <InviteLanding data={teamData} code={invite.code} onClose={() => setInvite(null)} />
   return <>{children}</>
 }

@@ -20,6 +20,10 @@ describe('normalizeInviteCode', () => {
     expect(normalizeInviteCode(' AB CD\tEF GH ')).toBe('ABCDEFGH')
     expect(normalizeInviteCode('ＡＢＣＤ－２３４５')).toBe('ABCD2345')
     expect(normalizeInviteCode('abcdーefgh')).toBe('ABCDEFGH')
+    // LINE や IME で入りやすい、ハイフンに似た文字
+    expect(normalizeInviteCode('ABCD‐EFGH')).toBe('ABCDEFGH')
+    expect(normalizeInviteCode('ABCD−EFGH')).toBe('ABCDEFGH')
+    expect(normalizeInviteCode('ABCD–EFGH')).toBe('ABCDEFGH')
   })
 })
 
@@ -136,11 +140,13 @@ describe('招待リンク', () => {
   })
 
   it('URL からコードを取り出す。小文字でも読み、形が違えば null', () => {
-    expect(inviteCodeFromUrl('?invite=abcd2345')).toBe('ABCD2345')
-    expect(inviteCodeFromUrl('?x=1&invite=ABCD-2345')).toBe('ABCD2345')
-    expect(inviteCodeFromUrl('?invite=ABC')).toBeNull()
-    expect(inviteCodeFromUrl('?invite=ABCD2340')).toBeNull()
+    expect(inviteCodeFromUrl('?invite=abcd2345')).toEqual({ code: 'ABCD2345' })
+    expect(inviteCodeFromUrl('?x=1&invite=ABCD-2345')).toEqual({ code: 'ABCD2345' })
+    // 途中で切れたリンク・使わない文字は、招待リンクだが読めない
+    expect(inviteCodeFromUrl('?invite=ABC')).toEqual({ code: null })
+    expect(inviteCodeFromUrl('?invite=ABCD2340')).toEqual({ code: null })
     expect(inviteCodeFromUrl('')).toBeNull()
+    expect(inviteCodeFromUrl('?x=1')).toBeNull()
   })
 
   it('取り除いても、ほかのパラメーターと置き場所は残す', () => {

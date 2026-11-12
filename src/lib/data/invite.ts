@@ -23,9 +23,9 @@ export interface InviteInfo {
   code: string | null
 }
 
-/** 全角を半角にし、空白とハイフンを取り、大文字にする（サーバーでも同じことをする） */
+/** 全角を半角にし、空白とハイフン（似た文字も）を取り、大文字にする（サーバーも空白とハイフンを取る） */
 export function normalizeInviteCode(text: string): string {
-  return text.normalize('NFKC').replace(/[\s\-ー－]/g, '').toUpperCase()
+  return text.normalize('NFKC').replace(/[\s\-‐‑‒–—―−ー－]/g, '').toUpperCase()
 }
 
 /** 整えたあとのコードが形に合わなければ、理由を返す */
@@ -72,12 +72,15 @@ export function inviteLink(origin: string, base: string, code: string): string {
   return url.toString()
 }
 
-/** URL の招待コード。なければ、または形が違えば null */
-export function inviteCodeFromUrl(search: string): string | null {
+/**
+ * URL の招待コード。招待リンクでなければ null。
+ * リンクが途中で切れているなど形が違えば { code: null }（画面で理由を出す）
+ */
+export function inviteCodeFromUrl(search: string): { code: string | null } | null {
   const raw = new URLSearchParams(search).get(INVITE_PARAM)
   if (raw === null) return null
   const code = normalizeInviteCode(raw)
-  return checkInviteCode(code) === null ? code : null
+  return { code: checkInviteCode(code) === null ? code : null }
 }
 
 /** 招待コードを取り除いた URL（参加した・やめたあとに、アドレスバーから消す） */
