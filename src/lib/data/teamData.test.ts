@@ -344,3 +344,42 @@ describe('deleteMatch（試合・練習・紅白戦の削除）', () => {
     expect(tables.matches).toHaveLength(3)
   })
 })
+
+describe('deleteOpponent（相手チームの削除）', () => {
+  const base = (): Record<string, Row[]> => ({
+    opponents: [
+      { id: 'o1', team_id: 't1', name: '熊本工業' },
+      { id: 'o2', team_id: 't1', name: '済々黌' },
+    ],
+    matches: [{ id: 'm1', kind: 'match', opponent_id: 'o1' }],
+  })
+
+  it('どの試合にも使われていない相手チームを消す（ほかの相手は残す）', async () => {
+    const tables = base()
+    await createSupabaseTeamData(() => fakeClient(tables).client).deleteOpponent('o2')
+    expect(tables.opponents?.map((o) => o.id)).toEqual(['o1'])
+  })
+
+  it('試合で使われている相手チームは、消さずに断る', async () => {
+    const tables = base()
+    await expect(createSupabaseTeamData(() => fakeClient(tables).client).deleteOpponent('o1')).rejects.toThrow(
+      '試合で使われている',
+    )
+    expect(tables.opponents).toHaveLength(2)
+    expect(tables.matches).toHaveLength(1)
+  })
+
+  it('ない相手チーム（または権限のない相手チーム）は、消したことにしない', async () => {
+    const tables = base()
+    await expect(createSupabaseTeamData(() => fakeClient(tables).client).deleteOpponent('nothing')).rejects.toThrow(
+      '削除できませんでした',
+    )
+  })
+
+  it('消すのに失敗したら、そのまま伝える', async () => {
+    const tables = base()
+    const { client } = fakeClient(tables, { failDelete: ['opponents'] })
+    await expect(createSupabaseTeamData(() => client).deleteOpponent('o2')).rejects.toThrow()
+    expect(tables.opponents).toHaveLength(2)
+  })
+})

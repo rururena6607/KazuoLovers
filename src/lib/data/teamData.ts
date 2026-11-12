@@ -63,6 +63,11 @@ export interface TeamData {
   /** 相手チーム。紅白戦の B チーム（試合ごとに自動で作るもの）は含まない */
   listOpponents(teamId: string): Promise<Opponent[]>
   createOpponent(teamId: string, name: string): Promise<Opponent>
+  /**
+   * 相手チームを消す（相手選手の背番号もいっしょに消える）。どの試合・紅白戦にも使われていないものだけ。
+   * 使われていれば reject する（先にその試合を削除する）
+   */
+  deleteOpponent(opponentId: string): Promise<void>
   listOpponentPlayers(opponentId: string): Promise<OpponentPlayer[]>
   /**
    * 同じ背番号がすでにあれば、それを返す（試合中にその場で足す。F-04）。
@@ -304,6 +309,17 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
       }
       // 第1セットを作れなくても、試合は残る。記録画面で開くときに createNextSet で作り直せる
       return { match, firstSet: await insertSet(match.id, 1) }
+    },
+    async deleteOpponent(opponentId) {
+      const used = check(
+        await db().from('matches').select('id').eq('opponent_id', opponentId).returns<{ id: string }[]>(),
+      )
+      fail(used.length > 0 ? '試合で使われている相手チームは消せません。先にその試合を削除してください。' : null)
+      // 消せたかを確かめるため、消した行を返してもらう（権限がなければ 0 件になる）
+      const deleted = check(
+        await db().from('opponents').delete().eq('id', opponentId).select('id').returns<{ id: string }[]>(),
+      )
+      fail(deleted.length === 0 ? '削除できませんでした（相手チームが見つからないか、権限がありません）。' : null)
     },
     async deleteMatch(matchId) {
       const match = check(
