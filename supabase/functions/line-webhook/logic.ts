@@ -49,9 +49,10 @@ export function parseCommand(text: string): Command | null {
 }
 
 export const HELP_TEXT = [
-  '使い方',
+  '使い方（Bot をメンションして送ってください。例：@Bot 結果）',
   '・「結果」：最新の試合のセットごとの得点と、AI のコメント',
   '・「7番」（または #7）：その選手の最新の試合の記録',
+  '・「ヘルプ」：この使い方',
 ].join('\n')
 
 export interface SetScore {
@@ -113,11 +114,35 @@ export function formatPlayerCounts(p: PlayerCountsInput): string {
 }
 
 /** Webhook の本文のうち、ここで使うもの */
+/** メンションされた相手1人分。index・length は text の中の位置（文字数）。isSelf は Bot 自身なら true */
+export interface LineMentionee {
+  index: number
+  length: number
+  isSelf?: boolean
+}
+
 export interface LineEvent {
   type: string
   replyToken?: string
   source?: { type: string; groupId?: string }
-  message?: { type: string; text?: string }
+  message?: { type: string; text?: string; mention?: { mentionees?: LineMentionee[] } }
+}
+
+/**
+ * Bot がメンションされていれば、メンションの部分（@Bot の名前）を取り除いた文を返す。
+ * Bot がメンションされていなければ null（グループの会話には反応しない）
+ */
+export function textForBot(message: LineEvent['message']): string | null {
+  const text = message?.text ?? ''
+  const mentionees = message?.mention?.mentionees ?? []
+  const self = mentionees.filter(
+    (m) => m.isSelf === true && Number.isInteger(m.index) && Number.isInteger(m.length) && m.index >= 0 && m.length > 0,
+  )
+  if (self.length === 0) return null
+  // 後ろから取り除くと、前のメンションの位置がずれない
+  return [...self]
+    .sort((a, b) => b.index - a.index)
+    .reduce((t, m) => t.slice(0, m.index) + t.slice(m.index + m.length), text)
 }
 
 export function parseEvents(body: unknown): LineEvent[] {

@@ -12,6 +12,7 @@ import {
   parseCommand,
   parseEvents,
   setScoreFromPoints,
+  textForBot,
   verifySignature,
   type LineEvent,
 } from './logic.ts'
@@ -136,12 +137,20 @@ async function handle(event: LineEvent): Promise<void> {
   if (!groupId) return
   if (event.type === 'join') return onJoin(event, groupId)
   if (event.type !== 'message' || event.message?.type !== 'text' || !event.replyToken) return
-  const command = parseCommand(event.message.text ?? '')
-  if (!command) return
+  // Bot をメンションしたときだけ返信する（グループのふだんの会話には反応しない）
+  const text = textForBot(event.message)
+  if (text === null) return
 
   // つないだグループにだけ返す
   const { data: team } = await db.from('teams').select('line_group_id').eq('id', TEAM_ID).maybeSingle()
   if (!team || team.line_group_id !== groupId) return
+
+  // メンションされたのに読めない文なら、使い方を返す
+  const command = parseCommand(text)
+  if (!command) {
+    await reply(event.replyToken, [HELP_TEXT])
+    return
+  }
 
   const texts =
     command.type === 'help' ? [HELP_TEXT] : command.type === 'result' ? await resultTexts() : await playerTexts(command.number)

@@ -8,6 +8,7 @@ import {
   parseCommand,
   parseEvents,
   setScoreFromPoints,
+  textForBot,
   verifySignature,
 } from '../../../supabase/functions/line-webhook/logic.ts'
 
@@ -106,5 +107,40 @@ describe('parseEvents', () => {
     expect(parseEvents({ events: [] })).toEqual([])
     expect(parseEvents({ events: [{ type: 'join' }, 1, null] })).toEqual([{ type: 'join' }])
     expect(parseEvents('x')).toEqual([])
+  })
+})
+
+describe('textForBot（メンションされたときだけ返信する）', () => {
+  it('Bot がメンションされていれば、メンションの部分を取り除いた文を返す', () => {
+    // 「@サーブ記録 結果」の「@サーブ記録」が index 0、長さ 6
+    const message = { type: 'text', text: '@サーブ記録 結果', mention: { mentionees: [{ index: 0, length: 6, isSelf: true }] } }
+    expect(textForBot(message)).toBe(' 結果')
+    expect(parseCommand(textForBot(message) ?? '')).toEqual({ type: 'result' })
+  })
+
+  it('文の後ろでメンションしても読める。ほかの人へのメンションは残す', () => {
+    const message = {
+      type: 'text',
+      text: '@たろう 7番 @サーブ記録',
+      mention: {
+        mentionees: [
+          { index: 0, length: 4 },
+          { index: 8, length: 6, isSelf: true },
+        ],
+      },
+    }
+    expect(textForBot(message)).toBe('@たろう 7番 ')
+  })
+
+  it('Bot がメンションされていなければ null（ふだんの会話には反応しない）', () => {
+    expect(textForBot({ type: 'text', text: '結果' })).toBeNull()
+    expect(textForBot({ type: 'text', text: '@たろう 結果', mention: { mentionees: [{ index: 0, length: 4 }] } })).toBeNull()
+    expect(textForBot({ type: 'text', text: '@サーブ記録 結果', mention: { mentionees: [{ index: 0, length: 6, isSelf: false }] } })).toBeNull()
+    expect(textForBot(undefined)).toBeNull()
+  })
+
+  it('位置がおかしいメンションは数えない', () => {
+    expect(textForBot({ type: 'text', text: '結果', mention: { mentionees: [{ index: -1, length: 3, isSelf: true }] } })).toBeNull()
+    expect(textForBot({ type: 'text', text: '結果', mention: { mentionees: [{ index: 0, length: 0, isSelf: true }] } })).toBeNull()
   })
 })
