@@ -211,6 +211,9 @@ export function toDataErrorMessage(error: { message: string; code?: string }): s
       return '入れた値が正しくありません。'
     case '42501':
       return 'このチームのデータを変える権限がありません。'
+    case 'P0001':
+      // migrations の関数が raise exception で出した理由（日本語）。そのまま見せる
+      return error.message.endsWith('。') ? error.message : `${error.message}。`
     case 'PGRST116':
       // 1 件のはずが 0 件（ないデータ、または権限がなくて見えない）
       return 'データが見つかりませんでした（ないか、このチームのデータではありません）。'
