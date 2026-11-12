@@ -25,7 +25,7 @@
 | 役割 | 担当者 | 主な責任 |
 | --- | --- | --- |
 | 画面・記録 | ガブ | 画面の骨組みとデザイン（1c スコアボード案）、記録画面（サーブ・レシーブ・アタック・練習）、PWA、ビルド設定、CI、Vercel |
-| データ・サーバ | ひろし | Supabase（テーブル、RLS、Auth、Realtime）、記録の保存と読み込み、送信待ちと再送、Edge Functions（Gemini・LINE）、ログインと管理画面 |
+| データ・サーバ | ひろし | Supabase（テーブル、RLS、Auth、Realtime）、記録の保存と読み込み、送信待ちと再送、Edge Functions（Claude API・LINE）、ログインと管理画面 |
 | 計算・分析 | とりはる | 指標の計算（JVA の式）、得点とサーブ権の更新、座標からゾーンへの変換、集計、分析画面、ヒートマップ、グラフ、セット別の結果、CSV |
 
 得意なことに合わせて入れ替えてよい。入れ替えたときは、3 節の所有範囲もあわせて直す。
@@ -66,7 +66,7 @@ KazuoLovers/
 │   └─ contracts/        記録の型とインターフェース（約束）                             … ひろし（管理）＋全員承認
 ├─ supabase/
 │   ├─ migrations/       テーブル、RLS                                                  … ひろし
-│   └─ functions/        gemini-report、line-webhook、line-push                         … ひろし
+│   └─ functions/        ai-report、line-webhook、line-push                             … ひろし
 ├─ public/               アイコン、apple-touch-icon                                     … ガブ
 ├─ docs/                 要件定義書、本書、担当表                                       … 全員承認
 ├─ package.json、vite.config.ts、tsconfig.json、eslint の設定                          … ガブ
@@ -195,7 +195,7 @@ PR テンプレートのチェックリスト（T-00 で `.github/pull_request_t
 - [ ] contracts の約束を変えていない（変える場合は別の PR にした）
 - [ ] lib/ を変えた場合はテストを追加・更新し、ローカルで通した
 - [ ] AI が書いた部分を自分で読み、説明できる
-- [ ] 秘密情報（Supabase の service_role キー、Gemini・LINE のキー）を含めていない
+- [ ] 秘密情報（Supabase の service_role キー、Claude API・LINE のキー）を含めていない
 - [ ] 選手の名前を外部 AI に送る処理を入れていない
 - [ ] 無関係な整形・名前の変更・依存の更新をしていない
 ```
@@ -245,7 +245,7 @@ docs/requirements.md と docs/implementation-plan.md に従うこと。
 - TypeScript で書き、any を使わない。
 - lib/ の関数には Vitest のテストを書く。
 - 依存ライブラリの追加・更新、無関係な整形や名前の変更はしない。
-- API キーをブラウザのコードに書かない。Gemini と LINE は Edge Functions からだけ呼ぶ。
+- API キーをブラウザのコードに書かない。Claude API と LINE は Edge Functions からだけ呼ぶ。
 ```
 
 ### 6.3 AI にさせないこと
@@ -254,7 +254,7 @@ docs/requirements.md と docs/implementation-plan.md に従うこと。
 - ファイル全体の自動整形、一括リネーム、依存の一括更新（差分が膨らみ、他人の作業と衝突する）
 - 指標の式を「わかりやすく」変えること（JVA の式から外れる）
 - RLS を外したり緩めたりして、エラーを消すこと
-- 選手の名前を Gemini に送ること
+- 選手の名前を Claude API（外部の AI）に送ること
 - 秘密情報をコードやコミットに入れること
 - テストを通すために、テストや合格条件を弱めること
 
@@ -328,7 +328,7 @@ T-00 と T-01 は他のすべての作業の前提なので、**10月15日の授
 | T-31 | AI に送る集計の JSON（本数つき） | とりはる | T-20 | 背番号と数値だけが入っている | F-13 |
 | T-24 | 練習モードの記録画面（種類、狙ったゾーン、着弾点、入った／ミス） | ガブ | T-11 | 選手が1人で記録できる | F-10 |
 | T-36 | 画面の仕上げ（ダークモード、375px で収まるか、ボタンの大きさ）。部の練習で出た直し。ラリー中の表示を「相手の攻撃」「自チームの攻撃」に分け、自チームのサーブのあとはアタック欄を閉じる。コート図のゾーンを色分けする（実装済み：`ui/T-36-feedback`。11月9日までにマージ） | ガブ | T-16 | 記録画面がスクロールなしで収まる。自チームのサーブのあとはアタック欄が閉じている | 6 章、9 章 |
-| T-30 | Gemini の Edge Function、`ai_reports` への保存、同じ範囲は保存済みを返す | ひろし | T-14 | 名前を送らずにコメントが返る | F-13 |
+| T-30 | AI コメントの Edge Function（当初 Gemini、のちに Claude API に替えた）、`ai_reports` への保存、同じ範囲は保存済みを返す | ひろし | T-14 | 名前を送らずにコメントが返る | F-13 |
 | T-33 | LINE の Webhook（署名の検証、グループ ID の保存、「結果」「7番」への返信） | ひろし | T-14 | 部のテスト用グループで返信が来る | F-15 |
 | T-25 | 同時記録の基礎（Realtime でほかの端末に反映） | ひろし | T-14 | 2台で3秒以内に反映される | F-14 |
 
@@ -409,7 +409,7 @@ JVA の式にない指標（崩し率、アタック効果率、コース割合�
 | サービス | 作る人 | 作るもの | ほかの2人の入り方 |
 | --- | --- | --- | --- |
 | Supabase | ひろし | 組織（Organization）とプロジェクト | 学校のアドレスで各自のアカウントを作り、組織のメンバーに招待してもらう |
-| Gemini API（Google AI Studio） | ひろし | API キー | 招待しない。キーは Supabase の Edge Functions の環境変数にだけ置く |
+| Claude API（Anthropic Console） | ひろし | 組織と API キー、クレジットの購入、月の使用上限 | 招待しない。キーは Supabase の Edge Functions の環境変数にだけ置く |
 | LINE Developers | ひろし | プロバイダーと Messaging API のチャネル、LINE 公式アカウント | 学校のアドレスで各自のアカウントを作り、チャネルの権限を付けてもらう |
 
 - API キーやチャネルのシークレットは、チャットやコミットに貼らない。必要な人には Supabase の環境変数の画面で見てもらう
