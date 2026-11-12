@@ -537,6 +537,18 @@ button {
   }
 }
 
+/*
+ * iPad の横向き：画面の高さが足りず、コート図が大きいと結果のボタンや「受けた相手」がタブバーの下に隠れる。
+ * 1列のまま（左右に分けると選手のボタンが切れる）、コート図の幅を画面の高さに合わせて縮める。
+ * 524px はコート図以外（得点・選手・結果・タブバーなど）の高さ、1.364 はコート図＋エンドラインの横÷縦。
+ */
+@media (min-width: 700px) and (orientation: landscape) {
+  .court:not(.court-full),
+  .endline {
+    max-width: clamp(300px, calc((100dvh - 524px) * 1.364), 560px);
+  }
+}
+
 /* 名前を大きく出す選手のボタン（練習モード。練習では背番号を使わない） */
 .chip-name {
   display: inline-flex;
