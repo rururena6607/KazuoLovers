@@ -65,7 +65,7 @@
 - 参考値の本数などの定数は `src/contracts/config.ts` を使い、数値を直接書かない。
 - **TypeScript**（`strict`）で書き、`any` を使わない。
 - `src/lib/` の関数には Vitest のテストを書く。指標のテストには JVA の記録票の数字を使う（実装計画書 8 節）。
-- API キーをブラウザのコードに書かない。Gemini と LINE は Supabase の Edge Functions からだけ呼ぶ。
+- API キーをブラウザのコードに書かない。Claude API と LINE は Supabase の Edge Functions からだけ呼ぶ。
 - 依存ライブラリの追加・更新、無関係な整形や名前の変更はしない。
 
 ## してはいけないこと
@@ -74,8 +74,8 @@
 - ファイル全体の自動整形、一括リネーム、依存の一括更新
 - 指標の式を「わかりやすく」変えること（JVA の式から外れる）
 - RLS を外したり緩めたりして、エラーを消すこと
-- 選手の名前を Gemini に送ること
-- 秘密情報（`.env`、Supabase の service_role キー、Gemini・LINE のキー）をコードやコミットに入れること
+- 選手の名前を Claude API（外部の AI）に送ること
+- 秘密情報（`.env`、Supabase の service_role キー、Claude API・LINE のキー）をコードやコミットに入れること
 - テストを通すために、テストや合格条件を弱めること
 - `main` への直接の push
 
