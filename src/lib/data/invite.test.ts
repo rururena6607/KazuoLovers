@@ -4,10 +4,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
 import {
   checkInviteCode,
+  inviteCodeFromUrl,
   inviteInfoFromRow,
+  inviteLink,
   joinPreviewFromRow,
   normalizeInviteCode,
   teamFromJoinRow,
+  urlWithoutInvite,
 } from './invite.ts'
 import { createSupabaseTeamData } from './teamData.ts'
 
@@ -121,5 +124,29 @@ describe('teamData の招待コード', () => {
   it('部員が発行しようとすると、権限がないと出る', async () => {
     const { data } = fakeRpc(() => ({ data: null, error: { message: 'x', code: '42501' } }))
     await expect(data.regenerateInviteCode('t1')).rejects.toThrow('権限がありません')
+  })
+})
+
+describe('招待リンク', () => {
+  it('アプリの置き場所に ?invite=コード を付ける', () => {
+    expect(inviteLink('https://kazuo.example', '/', 'ABCD2345')).toBe('https://kazuo.example/?invite=ABCD2345')
+    expect(inviteLink('https://edu3.example', '/~u/KazuoLovers/', 'ABCD2345')).toBe(
+      'https://edu3.example/~u/KazuoLovers/?invite=ABCD2345',
+    )
+  })
+
+  it('URL からコードを取り出す。小文字でも読み、形が違えば null', () => {
+    expect(inviteCodeFromUrl('?invite=abcd2345')).toBe('ABCD2345')
+    expect(inviteCodeFromUrl('?x=1&invite=ABCD-2345')).toBe('ABCD2345')
+    expect(inviteCodeFromUrl('?invite=ABC')).toBeNull()
+    expect(inviteCodeFromUrl('?invite=ABCD2340')).toBeNull()
+    expect(inviteCodeFromUrl('')).toBeNull()
+  })
+
+  it('取り除いても、ほかのパラメーターと置き場所は残す', () => {
+    expect(urlWithoutInvite('https://edu3.example/~u/KazuoLovers/?invite=ABCD2345&x=1')).toBe(
+      'https://edu3.example/~u/KazuoLovers/?x=1',
+    )
+    expect(urlWithoutInvite('https://kazuo.example/?invite=ABCD2345')).toBe('https://kazuo.example/')
   })
 })

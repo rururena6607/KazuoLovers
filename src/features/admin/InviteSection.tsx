@@ -1,6 +1,6 @@
 // 招待コード（T-43、F-02）：管理者だけに出す。発行・再発行すると、前のコードは使えなくなる。
 import { useEffect, useState } from 'react'
-import type { InviteInfo } from '../../lib/data/invite.ts'
+import { inviteLink, type InviteInfo } from '../../lib/data/invite.ts'
 import type { TeamData } from '../../lib/data/teamData.ts'
 import { useAction } from './useAction.ts'
 
@@ -13,6 +13,7 @@ export function InviteSection({ data, teamId }: Props) {
   const [info, setInfo] = useState<InviteInfo | null>(null)
   /** 再発行の確認を出しているか（押し間違いで前のコードを使えなくしないよう、2 回押す） */
   const [confirming, setConfirming] = useState(false)
+  const [copied, setCopied] = useState(false)
   const { busy, error, run } = useAction()
 
   useEffect(() => {
@@ -24,6 +25,25 @@ export function InviteSection({ data, teamId }: Props) {
       const code = await data.regenerateInviteCode(teamId)
       setInfo({ isAdmin: true, code })
       setConfirming(false)
+      setCopied(false)
+    })
+  }
+
+  const link = info?.code ? inviteLink(window.location.origin, import.meta.env.BASE_URL, info.code) : null
+
+  const copyLink = () => {
+    if (!link) return
+    void run(async () => {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+    })
+  }
+
+  // スマホでは、LINE などに直接送れる（共有シートがない端末ではボタンを出さない）
+  const shareLink = () => {
+    if (!link) return
+    navigator.share({ title: 'チームへの招待', text: '招待リンクを開いて、ログインすると参加できます。', url: link }).catch(() => {
+      // 共有をやめたときも、ここに来る。何もしない
     })
   }
 
@@ -44,14 +64,29 @@ export function InviteSection({ data, teamId }: Props) {
           <p className="admin-code" aria-label="招待コード">
             {info.code}
           </p>
-          <p className="admin-mute">部員に伝えると、管理画面の「ほかのチームに移る」か、最初の画面から参加できます。</p>
+          <p className="admin-mute">
+            招待リンクを部員に送ると、開いてログインするだけで参加できます。コードを口で伝えて、管理画面から入れてもらうこともできます。
+          </p>
+          {link && (
+            <div className="admin-inline">
+              <input aria-label="招待リンク" readOnly value={link} onFocus={(e) => e.currentTarget.select()} />
+              <button type="button" className="btn" disabled={busy} onClick={copyLink}>
+                {copied ? 'コピーしました' : 'リンクをコピー'}
+              </button>
+              {'share' in navigator && (
+                <button type="button" className="btn" onClick={shareLink}>
+                  送る
+                </button>
+              )}
+            </div>
+          )}
         </>
       ) : (
         <p className="admin-mute">まだ発行していません。</p>
       )}
       {confirming ? (
         <div className="admin-inline">
-          <span className="admin-error">いまのコードは使えなくなります。</span>
+          <span className="admin-error">いまのコードと招待リンクは使えなくなります。</span>
           <button type="button" className="btn admin-danger" disabled={busy} onClick={regenerate}>
             {busy ? '発行しています…' : '再発行する'}
           </button>

@@ -61,3 +61,28 @@ export function teamFromJoinRow(v: unknown): Team {
   if (!isRecord(v) || typeof v.id !== 'string' || typeof v.name !== 'string') return broken()
   return { id: v.id, name: v.name }
 }
+
+/** 招待リンクで招待コードを渡す URL のパラメーター（例：https://…/?invite=ABCD2345） */
+export const INVITE_PARAM = 'invite'
+
+/** 招待リンク。base はアプリの置き場所（Vercel なら '/'、edu3 なら '/~…/KazuoLovers/'） */
+export function inviteLink(origin: string, base: string, code: string): string {
+  const url = new URL(base, origin)
+  url.searchParams.set(INVITE_PARAM, code)
+  return url.toString()
+}
+
+/** URL の招待コード。なければ、または形が違えば null */
+export function inviteCodeFromUrl(search: string): string | null {
+  const raw = new URLSearchParams(search).get(INVITE_PARAM)
+  if (raw === null) return null
+  const code = normalizeInviteCode(raw)
+  return checkInviteCode(code) === null ? code : null
+}
+
+/** 招待コードを取り除いた URL（参加した・やめたあとに、アドレスバーから消す） */
+export function urlWithoutInvite(href: string): string {
+  const url = new URL(href)
+  url.searchParams.delete(INVITE_PARAM)
+  return url.toString()
+}

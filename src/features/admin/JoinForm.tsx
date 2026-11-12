@@ -1,6 +1,6 @@
 // 招待コードでチームに参加する（T-43、F-02）。参加すると、いまのチームからは抜ける。
 // 管理者が自分だけのチームは消える（選手・試合・記録も）ので、注意を2回出してから参加する。
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import type { Team } from '../../contracts/index.ts'
 import type { JoinPreview } from '../../lib/data/invite.ts'
 import type { TeamData } from '../../lib/data/teamData.ts'
@@ -9,6 +9,10 @@ import { useAction } from './useAction.ts'
 interface Props {
   data: TeamData
   onJoined: (team: Team) => void
+  /** 招待リンクで開いたときのコード。あれば、すぐに確かめる */
+  initialCode?: string
+  /** 「やめる」を押したとき（招待リンクの画面を閉じる）。なければ、入力に戻るだけ */
+  onCancel?: () => void
 }
 
 /** input：コードを入れる。confirm：入るチームと抜けるチームを見せる。confirmDelete：消えるチームをもう一度確かめる */
@@ -16,8 +20,8 @@ type Step = 'input' | 'confirm' | 'confirmDelete'
 
 const names = (list: readonly string[]) => list.map((n) => `「${n}」`).join('・')
 
-export function JoinForm({ data, onJoined }: Props) {
-  const [code, setCode] = useState('')
+export function JoinForm({ data, onJoined, initialCode, onCancel }: Props) {
+  const [code, setCode] = useState(initialCode ?? '')
   const [preview, setPreview] = useState<JoinPreview | null>(null)
   const [step, setStep] = useState<Step>('input')
   const { busy, error, run, clearError } = useAction()
@@ -26,7 +30,17 @@ export function JoinForm({ data, onJoined }: Props) {
     setPreview(null)
     setStep('input')
     clearError()
+    onCancel?.()
   }
+
+  // 招待リンクで開いたら、コードを入れる手間を省いて、すぐ確かめる
+  useEffect(() => {
+    if (!initialCode) return
+    void run(async () => {
+      setPreview(await data.previewJoin(initialCode))
+      setStep('confirm')
+    })
+  }, [data, initialCode, run])
 
   const onCheck = (e: FormEvent) => {
     e.preventDefault()
@@ -54,9 +68,16 @@ export function JoinForm({ data, onJoined }: Props) {
             onChange={(e) => setCode(e.target.value)}
           />
         </label>
-        <button type="submit" className="btn" disabled={busy}>
-          {busy ? '確かめています…' : '確かめる'}
-        </button>
+        <div className="admin-inline">
+          <button type="submit" className="btn" disabled={busy}>
+            {busy ? '確かめています…' : '確かめる'}
+          </button>
+          {onCancel && (
+            <button type="button" className="btn" disabled={busy} onClick={reset}>
+              やめる
+            </button>
+          )}
+        </div>
         {error && (
           <p className="admin-error" role="alert">
             {error}
