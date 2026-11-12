@@ -79,17 +79,7 @@ export function OpponentsSection({ data, teamId, opponents, onAdded, onDeleted }
                 {o.name}
                 <span aria-hidden="true">{openId === o.id ? '▲' : '▼'}</span>
               </button>
-              {confirmId === o.id ? (
-                <>
-                  <span className="admin-error">背番号もすべて消えます。</span>
-                  <button type="button" className="btn admin-danger" disabled={busy} onClick={() => onDelete(o.id)}>
-                    {busy ? '消しています…' : '削除する'}
-                  </button>
-                  <button type="button" className="btn" disabled={busy} onClick={() => setConfirmId(null)}>
-                    やめる
-                  </button>
-                </>
-              ) : (
+              {confirmId !== o.id && (
                 <button
                   type="button"
                   className="btn"
@@ -100,6 +90,17 @@ export function OpponentsSection({ data, teamId, opponents, onAdded, onDeleted }
                 </button>
               )}
             </div>
+            {confirmId === o.id && (
+              <div className="admin-confirm">
+                <span className="admin-error">背番号もすべて消えます。</span>
+                <button type="button" className="btn admin-danger" disabled={busy} onClick={() => onDelete(o.id)}>
+                  {busy ? '消しています…' : '削除する'}
+                </button>
+                <button type="button" className="btn" disabled={busy} onClick={() => setConfirmId(null)}>
+                  やめる
+                </button>
+              </div>
+            )}
             {openId === o.id && (
               <div className="admin-sub">
                 <p className="admin-mute">
