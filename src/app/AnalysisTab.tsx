@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { RecordRepository, SetRecords } from '../contracts/index.ts'
 import { AnalysisScreen, type AnalysisData } from '../features/analysis/index.ts'
+import type { AiReports } from '../lib/data/aiReport.ts'
 import type { LoadTeam, TeamSnapshot } from './analysisData.ts'
 
 // 分析のタブ（とりはるの AnalysisScreen）に、チームのデータと全試合の記録を渡す。
@@ -13,6 +14,8 @@ interface Props {
   /** このタブを開いているか。開いたときに読み直す */
   active: boolean
   onChooseMatch: () => void
+  /** AI コメント（T-32・F-13）。本物（Supabase）のときだけ渡す。渡さなければ、AI コメントの欄は出ない */
+  aiReports?: AiReports
 }
 
 type State =
@@ -21,7 +24,7 @@ type State =
   | { kind: 'noTeam' }
   | { kind: 'ready'; team: TeamSnapshot }
 
-export default function AnalysisTab({ repo, loadTeam, active, onChooseMatch }: Props) {
+export default function AnalysisTab({ repo, loadTeam, active, onChooseMatch, aiReports }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' })
   const [records, setRecords] = useState<ReadonlyMap<string, SetRecords[]>>(new Map())
 
@@ -83,5 +86,8 @@ export default function AnalysisTab({ repo, loadTeam, active, onChooseMatch }: P
       </section>
     )
   }
-  return <AnalysisScreen data={data} />
+  // チームの id は試合から取る（分析は試合があるときだけ出すので、いつもある。どの試合も同じチーム）
+  const teamId = data.matches[0]?.teamId
+  const ai = aiReports && teamId ? { teamId, aiReports } : undefined
+  return <AnalysisScreen data={data} ai={ai} />
 }
