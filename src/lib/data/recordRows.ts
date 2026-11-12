@@ -3,6 +3,7 @@
 import type {
   AnyRecord,
   AttackRecord,
+  OppAttackRecord,
   PointRecord,
   ReceptionRecord,
   ServeRecord,
@@ -13,6 +14,7 @@ export const TABLES = {
   serve: 'serves',
   reception: 'receptions',
   attack: 'attacks',
+  oppAttack: 'opp_attacks',
   point: 'points',
 } as const
 
@@ -27,6 +29,7 @@ export interface ServeRow {
   to_x: number | null
   to_y: number | null
   target_zone: number | null
+  speed: ServeRecord['speed']
   result: ServeRecord['result']
   miss_type: ServeRecord['missType']
   reception: ServeRecord['reception']
@@ -52,10 +55,27 @@ export interface AttackRow {
   attacker_id: string
   attack_type: AttackRecord['attackType']
   is_back: boolean
+  from_x: number | null
+  from_y: number | null
   to_x: number | null
   to_y: number | null
+  speed: AttackRecord['speed']
   result: AttackRecord['result']
   prev_reception: AttackRecord['prevReception']
+  recorded_at: string
+}
+
+export interface OppAttackRow {
+  client_id: string
+  set_id: string
+  hitter_id: string | null
+  digger_id: string | null
+  from_x: number | null
+  from_y: number | null
+  to_x: number | null
+  to_y: number | null
+  speed: OppAttackRecord['speed']
+  result: OppAttackRecord['result']
   recorded_at: string
 }
 
@@ -70,16 +90,18 @@ export interface PointRow {
   recorded_at: string
 }
 
-export type RecordRow = ServeRow | ReceptionRow | AttackRow | PointRow
+export type RecordRow = ServeRow | ReceptionRow | AttackRow | OppAttackRow | PointRow
 
 /** 選ぶ列。行の型と同じ */
 export const COLUMNS: Record<RecordTable, string> = {
   serves:
-    'client_id,set_id,server_id,serve_type,from_x,to_x,to_y,target_zone,result,miss_type,reception,receiver_id,recorded_at',
+    'client_id,set_id,server_id,serve_type,from_x,to_x,to_y,target_zone,speed,result,miss_type,reception,receiver_id,recorded_at',
   receptions:
     'client_id,set_id,receiver_id,opp_server_id,opp_serve_type,at_x,at_y,result,recorded_at',
   attacks:
-    'client_id,set_id,attacker_id,attack_type,is_back,to_x,to_y,result,prev_reception,recorded_at',
+    'client_id,set_id,attacker_id,attack_type,is_back,from_x,from_y,to_x,to_y,speed,result,prev_reception,recorded_at',
+  opp_attacks:
+    'client_id,set_id,hitter_id,digger_id,from_x,from_y,to_x,to_y,speed,result,recorded_at',
   points: 'client_id,set_id,side,cause,source_id,our_score,opp_score,recorded_at',
 }
 
@@ -97,6 +119,7 @@ export function toRow(rec: AnyRecord): { table: RecordTable; row: RecordRow } {
           to_x: rec.toX,
           to_y: rec.toY,
           target_zone: rec.targetZone,
+          speed: rec.speed ?? null,
           result: rec.result,
           miss_type: rec.missType,
           reception: rec.reception,
@@ -128,10 +151,30 @@ export function toRow(rec: AnyRecord): { table: RecordTable; row: RecordRow } {
           attacker_id: rec.attackerId,
           attack_type: rec.attackType,
           is_back: rec.isBack,
+          from_x: rec.fromX ?? null,
+          from_y: rec.fromY ?? null,
           to_x: rec.toX,
           to_y: rec.toY,
+          speed: rec.speed ?? null,
           result: rec.result,
           prev_reception: rec.prevReception,
+          recorded_at: rec.recordedAt,
+        },
+      }
+    case 'opp_attack':
+      return {
+        table: TABLES.oppAttack,
+        row: {
+          client_id: rec.clientId,
+          set_id: rec.setId,
+          hitter_id: rec.hitterId,
+          digger_id: rec.diggerId,
+          from_x: rec.fromX,
+          from_y: rec.fromY,
+          to_x: rec.toX,
+          to_y: rec.toY,
+          speed: rec.speed,
+          result: rec.result,
           recorded_at: rec.recordedAt,
         },
       }
@@ -170,6 +213,7 @@ export function serveFromRow(r: ServeRow): ServeRecord {
     reception: r.reception,
     receiverId: r.receiver_id,
     targetZone: r.target_zone,
+    speed: r.speed,
     recordedAt: iso(r.recorded_at),
   }
 }
@@ -197,10 +241,30 @@ export function attackFromRow(r: AttackRow): AttackRecord {
     attackerId: r.attacker_id,
     attackType: r.attack_type,
     isBack: r.is_back,
+    fromX: r.from_x,
+    fromY: r.from_y,
     toX: r.to_x,
     toY: r.to_y,
+    speed: r.speed,
     result: r.result,
     prevReception: r.prev_reception,
+    recordedAt: iso(r.recorded_at),
+  }
+}
+
+export function oppAttackFromRow(r: OppAttackRow): OppAttackRecord {
+  return {
+    kind: 'opp_attack',
+    clientId: r.client_id,
+    setId: r.set_id,
+    hitterId: r.hitter_id,
+    diggerId: r.digger_id,
+    fromX: r.from_x,
+    fromY: r.from_y,
+    toX: r.to_x,
+    toY: r.to_y,
+    speed: r.speed,
+    result: r.result,
     recordedAt: iso(r.recorded_at),
   }
 }
@@ -228,6 +292,8 @@ export function recordFromRow(table: RecordTable, row: RecordRow): AnyRecord {
       return receptionFromRow(row as ReceptionRow)
     case 'attacks':
       return attackFromRow(row as AttackRow)
+    case 'opp_attacks':
+      return oppAttackFromRow(row as OppAttackRow)
     case 'points':
       return pointFromRow(row as PointRow)
   }
@@ -238,5 +304,6 @@ export const emptySetRecords = (setId: string): SetRecords => ({
   serves: [],
   receptions: [],
   attacks: [],
+  oppAttacks: [],
   points: [],
 })

@@ -6,7 +6,7 @@
 // 範囲の選択（試合・セット・相手）は、呼ぶ側が記録を絞ってから渡す。練習のサーブは渡さない。
 // ゾーンに分ける関数（lib/court の zoneOf）は、呼ぶ側が引数で渡す（lib/stats は lib/court に依存しない）。
 import { ZONES, type ReceptionRecord, type ServeRecord } from '../../contracts/index.ts'
-import type { ZoneOf } from './aggregate.ts'
+import type { SplitsOf, ZoneOf } from './aggregate.ts'
 import { percent } from './metrics.ts'
 
 export interface CourseZone {
@@ -28,7 +28,7 @@ const ZONE_NUMBERS: readonly number[] = [...ZONES.opponent.front, ...ZONES.oppon
   (a, b) => a - b,
 )
 
-function shareOf(zones: readonly (number | null)[], total: number): CourseShare {
+export function shareOf(zones: readonly (number | null)[], total: number): CourseShare {
   const counts = new Map<number, number>(ZONE_NUMBERS.map((z) => [z, 0]))
   for (const zone of zones) {
     if (zone !== null) counts.set(zone, (counts.get(zone) ?? 0) + 1)
@@ -42,10 +42,14 @@ function shareOf(zones: readonly (number | null)[], total: number): CourseShare 
 }
 
 /** 自チームのサーブの着弾ゾーン割合（相手コート） */
-export function serveLandingShare(serves: readonly ServeRecord[], zoneOf: ZoneOf): CourseShare {
+export function serveLandingShare(
+  serves: readonly ServeRecord[],
+  zoneOf: ZoneOf,
+  splitsOf?: SplitsOf,
+): CourseShare {
   const withPoint = serves.filter((s) => s.toX !== null && s.toY !== null)
   return shareOf(
-    withPoint.map((s) => zoneOf('opponent', s.toX, s.toY)),
+    withPoint.map((s) => zoneOf('opponent', s.toX, s.toY, splitsOf?.(s.setId))),
     withPoint.length,
   )
 }

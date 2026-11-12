@@ -22,3 +22,6 @@ export const ZONES = {
   opponent: { front: [2, 3, 4], back: [1, 6, 5] },
   own: { front: [4, 3, 2], back: [5, 6, 1] },
 } as const
+
+/** 相手コートの列の境目の既定（3 等分）。セットごとに GameSet の colSplit1・colSplit2 で変えられる */
+export const DEFAULT_COL_SPLITS = [1 / 3, 2 / 3] as const

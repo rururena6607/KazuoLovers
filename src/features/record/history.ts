@@ -8,7 +8,8 @@ import type {
   PointRecord,
   SetRecords,
 } from '../../contracts/index.ts'
-import { zoneOf } from '../../lib/court/index.ts'
+import { type ColSplits, zoneOf } from '../../lib/court/index.ts'
+import { digGradeOf } from './dig.ts'
 import { ATTACK_RESULTS, MISS_TYPES } from './labels.ts'
 import { gradeOf } from './reception.ts'
 import { byRecordedAt } from './score.ts'
@@ -20,7 +21,9 @@ export type Entry = PlayRecord | PointRecord
 export function entriesOf(set: SetRecords | undefined): Entry[] {
   if (!set) return []
   const manual = set.points.filter((p) => p.sourceId === null)
-  return [...set.serves, ...set.receptions, ...set.attacks, ...manual].sort(byRecordedAt)
+  return [...set.serves, ...set.receptions, ...set.attacks, ...(set.oppAttacks ?? []), ...manual].sort(
+    byRecordedAt,
+  )
 }
 
 /** 1行を消すときに消す記録の clientId。1本を消すとその得点も消す（取消で得点も戻る） */
@@ -29,16 +32,18 @@ export function idsToRemove(entry: Entry, points: readonly PointRecord[]): strin
   return [entry.clientId, ...points.filter((p) => p.sourceId === entry.clientId).map((p) => p.clientId)]
 }
 
-/** 得点が変わらない修正だけを許す：インのサーブと A〜D のレシーブの評価 */
+/** 得点が変わらない修正だけを許す：インのサーブと A〜D のレシーブ・相手のスパイクを拾った評価 */
 export function editableGrade(entry: Entry): Grade | null {
   if (entry.kind === 'serve' && entry.result === 'in') return entry.reception
   if (entry.kind === 'reception') return gradeOf(entry)
+  if (entry.kind === 'opp_attack') return digGradeOf(entry.result)
   return null
 }
 
 export function withGrade(entry: Entry, grade: Grade): Entry {
   if (entry.kind === 'serve' && entry.result === 'in') return { ...entry, reception: grade }
   if (entry.kind === 'reception' && editableGrade(entry) !== null) return { ...entry, result: grade }
+  if (entry.kind === 'opp_attack' && editableGrade(entry) !== null) return { ...entry, result: grade }
   return entry
 }
 
@@ -63,12 +68,13 @@ export function relinkAttacks(plays: readonly PlayRecord[]): AttackRecord[] {
 /**
  * 画面の下に出す1行（要件定義書 6 章の例：`#7 → #12 C · Z1`）。
  * サーブは「サーバー → 受けた相手 結果 · 着弾ゾーン」、レシーブは「相手サーバー → レシーバー 結果」。
- * 名簿にいない選手は「?」
+ * 名簿にいない選手は「?」。colSplits はそのセットの相手コートの列の境目（F-24。省略すると等分）
  */
 export function describeEntry(
   entry: Entry,
   players: readonly Player[],
   oppPlayers: readonly OpponentPlayer[],
+  colSplits?: ColSplits,
 ): string {
   const own = (id: string | null) => {
     const p = players.find((x) => x.id === id)
@@ -82,7 +88,7 @@ export function describeEntry(
 
   switch (entry.kind) {
     case 'serve': {
-      const zone = zoneOf('opponent', entry.toX, entry.toY)
+      const zone = zoneOf('opponent', entry.toX, entry.toY, colSplits)
       const missLabel = MISS_TYPES.find((m) => m.value === entry.missType)?.label
       const result =
         entry.result === 'ace'
@@ -111,6 +117,12 @@ export function describeEntry(
         entry.isBack ? 'バックアタック' : 'アタック',
         ATTACK_RESULTS.find((r) => r.value === entry.result)?.label ?? null,
       )
+    case 'opp_attack': {
+      const hitter = opp(entry.hitterId)
+      const digger = own(entry.diggerId)
+      const label = entry.result === 'killed' ? '拾えず' : entry.result === 'opp_error' ? '相手ミス' : entry.result
+      return join(hitter ? `${hitter} → 相手スパイク` : '相手スパイク', digger, label)
+    }
     case 'point':
       // 途中の得点を消すと記録したときの得点はずれるので、点数は出さない
       return `+1 ${entry.side === 'us' ? '自チーム' : '相手'}`

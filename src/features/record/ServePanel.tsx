@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import Court from '../../components/Court.tsx'
+import Court, { type CourtMark } from '../../components/Court.tsx'
+import type { ColSplits } from '../../components/courtGeometry.ts'
 import type { OpponentPlayer, Player, ServeRecord } from '../../contracts/index.ts'
 import AddOppNumber from './AddOppNumber.tsx'
+import { numberLabel } from './scrimmage.ts'
 import EndlinePicker from './EndlinePicker.tsx'
 import { newIds } from './ids.ts'
 import { GRADES, MISS_TYPES, SERVE_TYPES, playerLabel, toggle } from './labels.ts'
+import SpeedPicker from './SpeedPicker.tsx'
 import {
   buildServe,
   emptyDraft,
@@ -26,10 +29,35 @@ interface Props {
   /** 取消・削除した clientId。直前の1本が消えたら付け足しをやめる */
   removed: ReadonlySet<string>
   /** 相手の背番号をその場で足す（F-04）。足せないときは undefined */
-  onAddOpp?: (number: number) => Promise<OpponentPlayer>
+  onAddOpp?: (number: number, playerId?: string) => Promise<OpponentPlayer>
+  /** 相手の選手のボタンの文字（紅白戦の B チームは部員の名前。F-27）。省略時は背番号 */
+  oppLabel?: (o: OpponentPlayer) => string
+  /** 紅白戦のとき、B チームに足せる部員（F-27） */
+  bCandidates?: readonly Player[]
+  /** 直前のサーブの着弾点（選手の色と背番号。F-22） */
+  recentMarks?: readonly CourtMark[]
+  /** このセットの相手コートの列の境目（F-24） */
+  colSplits?: ColSplits
+  /** 点線を動かしたとき。なければ動かせない */
+  onColSplitsChange?: (splits: ColSplits) => void
+  /** 点線を離したとき */
+  onColSplitsCommit?: (splits: ColSplits) => void
 }
 
-export default function ServePanel({ setId, players, oppPlayers, onSave, removed, onAddOpp }: Props) {
+export default function ServePanel({
+  setId,
+  players,
+  oppPlayers,
+  onSave,
+  removed,
+  onAddOpp,
+  oppLabel = numberLabel,
+  bCandidates,
+  recentMarks = [],
+  colSplits,
+  onColSplitsChange,
+  onColSplitsCommit,
+}: Props) {
   const [draft, setDraft] = useState<ServeDraft>(emptyDraft)
   const [pickingMiss, setPickingMiss] = useState(false)
   /** 受けた相手をあとから付け足せる直前の1本。次の1本の入力を始めたら null */
@@ -107,13 +135,17 @@ export default function ServePanel({ setId, players, oppPlayers, onSave, removed
       <Court
         side="opponent"
         label="相手コート（着弾点）"
-        marks={draft.to ? [draft.to] : []}
+        colSplits={colSplits}
+        onColSplitsChange={onColSplitsChange}
+        onColSplitsCommit={onColSplitsCommit}
+        marks={draft.to ? [...recentMarks, draft.to] : recentMarks}
         onTap={(p) => {
           // ネットより手前（自コート側の余白）は着弾点にしない
           if (p.y >= 0) update({ to: p })
         }}
       />
       <EndlinePicker x={draft.fromX} onChange={(x) => update({ fromX: x })} />
+      <SpeedPicker value={draft.speed} onChange={(speed) => update({ speed })} />
 
       {pickingMiss ? (
         <div className="row results" role="group" aria-label="ミスの種類">
@@ -170,14 +202,14 @@ export default function ServePanel({ setId, players, oppPlayers, onSave, removed
           <button
             key={o.id}
             type="button"
-            className="btn chip num"
+            className={o.playerId ? 'btn chip' : 'btn chip num'}
             aria-pressed={receiverId === o.id}
             onClick={() => selectReceiver(o.id)}
           >
-            {o.number}
+            {oppLabel(o)}
           </button>
         ))}
-        <AddOppNumber onAdd={onAddOpp} onAdded={(p) => selectReceiver(p.id)} />
+        <AddOppNumber onAdd={onAddOpp} candidates={bCandidates} onAdded={(p) => selectReceiver(p.id)} />
       </div>
     </div>
   )

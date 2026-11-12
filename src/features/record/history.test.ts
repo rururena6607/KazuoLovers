@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type {
   AttackRecord,
+  OppAttackRecord,
   PointRecord,
   ReceptionRecord,
   ServeRecord,
@@ -77,12 +78,34 @@ const attack = (over: Partial<AttackRecord>): AttackRecord => ({
   ...over,
 })
 
+const dig = (over: Partial<OppAttackRecord>): OppAttackRecord => ({
+  kind: 'opp_attack',
+  clientId: 'dg',
+  setId: 's1',
+  hitterId: null,
+  diggerId: 'p7',
+  fromX: null,
+  fromY: null,
+  toX: null,
+  toY: null,
+  speed: null,
+  result: 'A',
+  recordedAt: t(0),
+  ...over,
+})
+
 describe('describeEntry', () => {
   const d = (e: Parameters<typeof describeEntry>[0]) => describeEntry(e, DEMO_PLAYERS, DEMO_OPP_PLAYERS)
 
   it('要件定義書の例：#7 → #12 C · Z1', () => {
     // 相手コートの奥の左（x 0.1, y 0.9）はゾーン 1
     expect(d(serve({ receiverId: 'o12', toX: 0.1, toY: 0.9 }))).toBe('#7 → #12 C · Z1')
+  })
+  it('着弾ゾーンは、そのセットの列の境目に合わせる（F-24）', () => {
+    // 奥の列：等分なら x 0.3 は左（Z1）。境目を [0.25, 0.5] にすると中（Z6）
+    const sv = serve({ receiverId: 'o12', toX: 0.3, toY: 0.9 })
+    expect(d(sv)).toBe('#7 → #12 C · Z1')
+    expect(describeEntry(sv, DEMO_PLAYERS, DEMO_OPP_PLAYERS, [0.25, 0.5])).toBe('#7 → #12 C · Z6')
   })
   it('エースとミス', () => {
     expect(d(serve({ result: 'ace', reception: null }))).toBe('#7 エース')
@@ -149,5 +172,39 @@ describe('editableGrade / withGrade', () => {
     expect(editableGrade(reception({ result: 'opp_miss' }))).toBeNull()
     expect(withGrade(reception({}), 'D')).toMatchObject({ result: 'D' })
     expect(withGrade(serve({}), 'A')).toMatchObject({ reception: 'A' })
+  })
+})
+
+describe('相手のスパイク（F-25）', () => {
+  it('一覧に時刻順で並び、拾えず・相手ミスはその得点もいっしょに消す', () => {
+    const sv = serve({ clientId: 'sv1', recordedAt: t(1) })
+    const dg = dig({ clientId: 'dg1', result: 'killed', recordedAt: t(2) })
+    const auto = point({ clientId: 'pt1', side: 'opp', cause: 'opp_kill', sourceId: 'dg1', recordedAt: t(3) })
+    const set: SetRecords = {
+      setId: 's1',
+      serves: [sv],
+      receptions: [],
+      attacks: [],
+      oppAttacks: [dg],
+      points: [auto],
+    }
+    expect(entriesOf(set).map((e) => e.clientId)).toEqual(['sv1', 'dg1'])
+    expect(idsToRemove(dg, set.points)).toEqual(['dg1', 'pt1'])
+  })
+  it('oppAttacks がない古いデータでも一覧を作れる', () => {
+    const set: SetRecords = { setId: 's1', serves: [], receptions: [], attacks: [], points: [] }
+    expect(entriesOf(set)).toEqual([])
+  })
+  it('拾った評価（A〜D）だけ直せる。拾えず・相手ミスは得点が変わるので直せない', () => {
+    expect(editableGrade(dig({ result: 'B' }))).toBe('B')
+    expect(editableGrade(dig({ result: 'killed' }))).toBeNull()
+    expect(editableGrade(dig({ result: 'opp_error' }))).toBeNull()
+    expect(withGrade(dig({ result: 'B' }), 'D')).toMatchObject({ result: 'D' })
+    expect(withGrade(dig({ result: 'killed' }), 'D')).toMatchObject({ result: 'killed' })
+  })
+  it('拾ったあとのアタックは切り返しなので prevReception は null（7 章）', () => {
+    const dg = dig({ result: 'A', recordedAt: t(1) })
+    const at = attack({ clientId: 'at', prevReception: 'A', recordedAt: t(2) })
+    expect(relinkAttacks([dg, at])).toEqual([{ ...at, prevReception: null }])
   })
 })

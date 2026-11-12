@@ -3,7 +3,7 @@ import { zoneOf } from '../../lib/court/index.ts'
 import type { AiComment, AiReports } from '../../lib/data/aiReport.ts'
 import { buildAiSummary } from '../../lib/stats/index.ts'
 import { aiRequestOf, commentSections } from './aiComment.ts'
-import type { AnalysisData, Scope } from './view.ts'
+import { splitsOfSets, type AnalysisData, type Scope } from './view.ts'
 
 /** 画面の表示だけを決める。通信は AiCommentPanel が行う */
 export interface AiCommentViewProps {
@@ -100,7 +100,7 @@ export function AiCommentPanel({ teamId, scope, data, aiReports }: Props) {
     setBusy(true)
     setError(null)
     aiReports
-      .request({ teamId, scope: req.scope, summary: buildAiSummary(req.input, zoneOf), force })
+      .request({ teamId, scope: req.scope, summary: buildAiSummary(req.input, zoneOf, splitsOfSets(data.gameSets)), force })
       .then((made) => setComment(made))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'AI のコメントを作れませんでした。'))
       .finally(() => setBusy(false))

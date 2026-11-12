@@ -3,21 +3,38 @@ import { MIN_SAMPLE } from '../../contracts/index.ts'
 import type { AiReports } from '../../lib/data/aiReport.ts'
 import './analysis.css'
 import { AiCommentPanel } from './AiCommentPanel.tsx'
+import { playerColorMap } from '../../components/playerColors.ts'
 import { Heatmap } from './Heatmap.tsx'
+import { ScatterPlot } from './ScatterPlot.tsx'
 import { ScoreTrend, SetResults } from './SetResults.tsx'
 import { MetricRow, StatTable } from './StatTable.tsx'
 import { emptySet, scoreTrend, setResults } from './setResults.ts'
 import {
   COURSE_NOTES,
+  DIG_NOTE,
+  SCATTER_NOTE,
+  SCRIMMAGE_ATTACK_NOTE,
+  SCRIMMAGE_NOTE,
+  SCRIMMAGE_RECEPTION_NOTE,
+  SPEED_NOTE,
   TAB_LABELS,
+  attackMetricsForScrimmage,
+  attackTableForScrimmage,
   courseHeatmap,
+  digView,
+  filterByPlayer,
   heatmap,
   overallMetrics,
+  playerOptions,
   playerTable,
   practiceView,
   recordsInScope,
   scopeOptions,
+  serveScatter,
+  splitPractice,
   serveTypeTable,
+  splitsOfSets,
+  speedTable,
   type AnalysisData,
   type Scope,
   type Tab,
@@ -88,6 +105,8 @@ export function AnalysisScreen({
     initialScope ? { [initialScope.kind]: targetOf(initialScope) } : {},
   )
   const [tab, setTab] = useState<Tab>('serve')
+  /** ヒートマップ・コース割合・散布図を絞る選手の id。'' は全員（F-22） */
+  const [playerFilter, setPlayerFilter] = useState('')
 
   const pickable = kind === 'match' || kind === 'set' || kind === 'opponent'
   const options = useMemo(() => (pickable ? scopeOptions(kind, data) : []), [pickable, kind, data])
@@ -108,23 +127,49 @@ export function AnalysisScreen({
     setTargets({ ...targets, set: setId })
   }
 
+  // 範囲「練習」は、紅白戦（試合と同じ指標。メイン）とサーブ練習（成功率・ゾーン的中率。別の表）に分ける（5 章）
+  const parts = useMemo(
+    () => (kind === 'practice' ? splitPractice(sets, data) : null),
+    [kind, sets, data],
+  )
+  const matchLike = parts ? parts.scrimmage : sets
+  // セットごとの列の境目（F-24）。相手コートのゾーンの計算に使う
+  const splitsOf = useMemo(() => splitsOfSets(data.gameSets), [data.gameSets])
+  // 選手での絞り込み（F-22）。範囲やタブを変えて、選んだ選手の記録がなくなったら全員に戻す
+  const playerChoices = useMemo(
+    () => playerOptions(tab, matchLike, data.players),
+    [tab, matchLike, data.players],
+  )
+  const filterId = playerChoices.some((o) => o.id === playerFilter) ? playerFilter : ''
+  const filtered = useMemo(
+    () => filterByPlayer(tab, matchLike, filterId === '' ? null : filterId),
+    [tab, matchLike, filterId],
+  )
+  const colors = useMemo(() => playerColorMap(data.players), [data.players])
   // タブを切り替えても、範囲の集計はやり直さない。表示用の値は、記録・タブ・選手が変わったときだけ作る
   const overview = useMemo(
-    () =>
-      kind === 'practice'
-        ? null
-        : {
-            metrics: overallMetrics(tab, sets),
-            heat: tab === 'attack' ? null : heatmap(tab, sets),
-            course: tab === 'attack' ? null : courseHeatmap(tab, sets),
-            types: tab === 'serve' ? serveTypeTable(sets) : null,
-            players: playerTable(tab, sets, data.players),
-          },
-    [kind, tab, sets, data.players],
+    () => ({
+      metrics:
+        parts && tab === 'attack'
+          ? attackMetricsForScrimmage(overallMetrics(tab, matchLike))
+          : overallMetrics(tab, matchLike),
+      heat: tab === 'attack' ? null : heatmap(tab, filtered, splitsOf),
+      course: tab === 'attack' ? null : courseHeatmap(tab, filtered, splitsOf),
+      scatter: tab === 'serve' ? serveScatter(filtered, data.players, colors) : null,
+      dig: tab === 'reception' ? digView(matchLike, splitsOf) : null,
+      types: tab === 'serve' ? serveTypeTable(parts ? parts.scrimmageForTypes : matchLike) : null,
+      // 紅白戦のアタックは、Bチームに被ブロックの記録がないので、速さ別の表も効果率と失点を除く
+      speed: ((t) => (t && parts && tab === 'attack' ? attackTableForScrimmage(t) : t))(speedTable(tab, matchLike)),
+      players:
+        parts && tab === 'attack'
+          ? attackTableForScrimmage(playerTable(tab, matchLike, data.players))
+          : playerTable(tab, matchLike, data.players),
+    }),
+    [tab, matchLike, filtered, data.players, parts, splitsOf, colors],
   )
   const practice = useMemo(
-    () => (kind === 'practice' ? practiceView(sets, data.players) : null),
-    [kind, sets, data.players],
+    () => (parts ? practiceView(parts.drill, data.players) : null),
+    [parts, data.players],
   )
   // セット別の結果と得点の推移は、タブによらない
   const results = useMemo(
@@ -170,17 +215,16 @@ export function AnalysisScreen({
       )}
       {pickable && options.length === 0 && <p className="an-empty">{EMPTY_MESSAGE[kind]}</p>}
 
-      {practice && (
-        <>
-          <MetricRow metrics={practice.metrics} />
-          <Heatmap map={practice.heatmap} />
-          <StatTable title="選手別" nameHeader="選手" table={practice.table} />
-          <p className="an-note">{`${referenceNote}ゾーンは狙ったゾーン別です。`}</p>
-        </>
+      {parts && (
+        <p className="an-note">
+          練習の範囲です。紅白戦は試合と同じ指標で、サーブ練習は別の表で出します（試合の全体・相手には入りません）。
+        </p>
       )}
+      {parts && parts.scrimmage.length === 0 && <p className="an-empty">紅白戦の記録がありません</p>}
 
-      {overview && (
+      {(!parts || parts.scrimmage.length > 0) && (
         <>
+          {parts && <h3 className="an-part">紅白戦</h3>}
           <div className="an-seg" role="group" aria-label="種類">
             {TABS.map((t) => (
               <button key={t} type="button" aria-pressed={tab === t} onClick={() => setTab(t)}>
@@ -191,6 +235,21 @@ export function AnalysisScreen({
 
           {results && <SetResults table={results} onSelect={openSet} />}
           <MetricRow metrics={overview.metrics} />
+          {playerChoices.length > 0 && (
+            <select
+              className="an-select"
+              aria-label="選手で絞り込み"
+              value={filterId}
+              onChange={(e) => setPlayerFilter(e.target.value)}
+            >
+              <option value="">全員</option>
+              {playerChoices.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
           {overview.heat && <Heatmap map={overview.heat} />}
           {overview.course && (
             <>
@@ -198,10 +257,44 @@ export function AnalysisScreen({
               <p className="an-note">{tab === 'serve' ? COURSE_NOTES.serve : COURSE_NOTES.reception}</p>
             </>
           )}
+          {overview.dig && (
+            <section className="an-section" aria-label="相手のスパイク">
+              <h3>相手のスパイク</h3>
+              <MetricRow metrics={overview.dig.metrics} />
+              <Heatmap map={overview.dig.landing} />
+              <Heatmap map={overview.dig.origin} />
+              <p className="an-note">{DIG_NOTE}</p>
+            </section>
+          )}
+          {overview.scatter && (
+            <>
+              <ScatterPlot scatter={overview.scatter} />
+              <p className="an-note">{SCATTER_NOTE}</p>
+            </>
+          )}
           {overview.types && <StatTable title="サーブの種類別" nameHeader="種類" table={overview.types} />}
+          {overview.speed && (
+            <>
+              <StatTable title="速さ別" nameHeader="速さ" table={overview.speed} />
+              <p className="an-note">{SPEED_NOTE}</p>
+            </>
+          )}
           <StatTable title="選手別" nameHeader="選手" table={overview.players} />
           {trend && <ScoreTrend rows={trend} />}
           <p className="an-note">{referenceNote}</p>
+          {parts && <p className="an-note">{SCRIMMAGE_NOTE}</p>}
+          {parts && tab === 'reception' && <p className="an-note">{SCRIMMAGE_RECEPTION_NOTE}</p>}
+          {parts && tab === 'attack' && <p className="an-note">{SCRIMMAGE_ATTACK_NOTE}</p>}
+        </>
+      )}
+
+      {practice && parts && parts.drill.length > 0 && (
+        <>
+          <h3 className="an-part">サーブ練習</h3>
+          <MetricRow metrics={practice.metrics} />
+          <Heatmap map={practice.heatmap} />
+          <StatTable title="選手別" nameHeader="選手" table={practice.table} />
+          <p className="an-note">{`${referenceNote}ゾーンは狙ったゾーン別です。`}</p>
         </>
       )}
 

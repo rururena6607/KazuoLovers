@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type {
+  AttackRecord,
   GameSet,
+  OppAttackRecord,
+  OppAttackResult,
   Match,
   Opponent,
   Player,
@@ -10,6 +13,10 @@ import type {
 } from '../../contracts/index.ts'
 import {
   courseHeatmap,
+  filterByPlayer,
+  playerOptions,
+  serveScatter,
+  digView,
   heatmap,
   overallMetrics,
   playerTable,
@@ -17,6 +24,10 @@ import {
   recordsInScope,
   scopeOptions,
   serveTypeTable,
+  speedTable,
+  splitsOfSets,
+  splitPractice,
+  attackTableForScrimmage,
   type AnalysisData,
 } from './view.ts'
 
@@ -385,5 +396,332 @@ describe('courseHeatmap（コース割合）', () => {
     const by = new Map(map.cells.map((c) => [c.zone, c]))
     expect(by.get(6)?.text).toBe('50.0%*（2）') // 2/4
     expect(by.get(1)?.text).toBe('50.0%*（2）')
+  })
+})
+
+describe('speedTable（速さ別。5 章：全体指標と同じ式、速さなしはどちらにも入れない）', () => {
+  const atk = (o: Partial<AttackRecord>): AttackRecord => ({
+    kind: 'attack',
+    clientId: 'a',
+    setId: 's1',
+    attackerId: 'p7',
+    attackType: null,
+    isBack: false,
+    toX: null,
+    toY: null,
+    result: 'kill',
+    prevReception: null,
+    recordedAt: '2026-11-05T00:00:00Z',
+    ...o,
+  })
+
+  it('サーブ：速い＝エース1・C1・ミス1 の3本 → 33.3%*、遅い＝A1 の1本 → 0.0%*。速さなしは入れない', () => {
+    const t = speedTable('serve', [
+      {
+        ...empty('s1'),
+        serves: [
+          serve({ speed: 'fast', result: 'ace', reception: null }),
+          serve({ speed: 'fast', reception: 'C' }),
+          serve({ speed: 'fast', result: 'miss', reception: null, missType: 'net' }),
+          serve({ speed: 'slow', reception: 'A' }),
+          serve({ speed: null, result: 'ace', reception: null }),
+        ],
+      },
+    ])
+    expect(t?.columns).toEqual(['打数', 'サーブ効果率', 'エース率', 'ミス率'])
+    expect(t?.rows.map((r) => [r.label, r.cells.map((c) => c.text)])).toEqual([
+      ['速い', ['3', '33.3%*', '33.3%*', '33.3%*']],
+      ['遅い', ['1', '0.0%*', '0.0%*', '0.0%*']],
+    ])
+  })
+
+  it('アタック：速い＝決定1・継続1 → 決定率 50.0%*', () => {
+    const t = speedTable('attack', [
+      { ...empty('s1'), attacks: [atk({ speed: 'fast' }), atk({ speed: 'fast', result: 'continue' })] },
+    ])
+    expect(t?.rows).toHaveLength(1)
+    expect(t?.rows[0]?.cells[1]?.text).toBe('50.0%*')
+  })
+
+  it('速さを入れた記録がない・レシーブは null', () => {
+    expect(speedTable('serve', [{ ...empty('s1'), serves: [serve()] }])).toBeNull()
+    expect(speedTable('reception', [empty('s1')])).toBeNull()
+  })
+})
+
+describe('digView（相手のスパイク。要件定義書 5 章の計算例）', () => {
+  const opp = (result: OppAttackResult, o: Partial<OppAttackRecord> = {}): OppAttackRecord => ({
+    kind: 'opp_attack',
+    clientId: 'c',
+    setId: 's1',
+    hitterId: null,
+    diggerId: null,
+    fromX: null,
+    fromY: null,
+    toX: null,
+    toY: null,
+    speed: null,
+    result,
+    recordedAt: '2026-11-05T00:00:00Z',
+    ...o,
+  })
+  const times = (n: number, r: OppAttackResult): OppAttackRecord[] => Array.from({ length: n }, () => opp(r))
+  // 10 本：A3・B2・C1・拾えず3・相手ミス1 → 拾えた率 6 ÷ 9 × 100 ≒ 66.7%（分母 9 本は 10 本未満なので参考値「*」）
+  const sets: SetRecords[] = [
+    { ...empty('s1'), oppAttacks: [...times(3, 'A'), ...times(2, 'B'), ...times(1, 'C')] },
+    { ...empty('s2'), oppAttacks: [...times(3, 'killed'), ...times(1, 'opp_error')] },
+  ]
+
+  it('本数・拾えた率・拾えず・相手ミスを出す（セットをまたいで合計）', () => {
+    const texts = Object.fromEntries(digView(sets).metrics.map((m) => [m.label, m.cell.text]))
+    expect(texts).toEqual({ 相手のスパイク: '10', 拾えた率: '66.7%*', 拾えず: '3', 相手ミス: '1' })
+  })
+
+  it('拾えた率の分母（拾えた＋拾えず）が 10 本以上なら「*」を付けない', () => {
+    const big: SetRecords[] = [{ ...empty('s1'), oppAttacks: [...times(8, 'A'), ...times(2, 'killed')] }]
+    const cell = digView(big).metrics.find((m) => m.label === '拾えた率')?.cell
+    expect(cell).toEqual({ text: '80.0%', reference: false, negative: false })
+  })
+
+  it('記録がなければ「−」', () => {
+    const v = digView([empty('s1')])
+    expect(v.metrics.find((m) => m.label === '拾えた率')?.cell.text).toBe('−')
+    expect(v.landing.cells.every((c) => c.count === 0)).toBe(true)
+  })
+
+  it('位置の割合：落ちた位置は自コート、打ってくる位置は相手コート', () => {
+    const v = digView([
+      {
+        ...empty('s1'),
+        oppAttacks: [
+          opp('A', { fromX: 0.1, fromY: 0.1, toX: 0.1, toY: 0.9 }),
+          opp('killed', { fromX: 0.1, fromY: 0.1, toX: 0.5, toY: 0.9 }),
+        ],
+      },
+    ])
+    expect(v.landing.side).toBe('own')
+    expect(v.origin.side).toBe('opponent')
+    const text = (h: typeof v.landing, zone: number) => h.cells.find((c) => c.zone === zone)?.text
+    expect(text(v.landing, 5)).toBe('50.0%*（1）')
+    expect(text(v.landing, 6)).toBe('50.0%*（1）')
+    expect(text(v.origin, 2)).toBe('100.0%*（2）')
+  })
+})
+
+describe('範囲「練習」と紅白戦（5 章「紅白戦の個人成績」）', () => {
+  // 試合 m1（s1）、練習 pr（s4）、紅白戦 sc（s5）
+  const withScrimmage: AnalysisData = {
+    ...data,
+    matches: [...data.matches, match('sc', { kind: 'scrimmage', opponentId: 'b1' })],
+    gameSets: [...data.gameSets, gameSet('s5', 'sc', 1)],
+    records: [...data.records, empty('s5')],
+  }
+  const ids = (scope: Parameters<typeof recordsInScope>[0]) =>
+    recordsInScope(scope, withScrimmage).map((r) => r.setId)
+
+  it('練習の範囲には、サーブ練習と紅白戦の両方が入る', () => {
+    expect(ids({ kind: 'practice' })).toEqual(['s4', 's5'])
+  })
+  it('試合の全体・相手・試合には、紅白戦を入れない', () => {
+    expect(ids({ kind: 'all' })).toEqual(['s1', 's2', 's3'])
+    expect(ids({ kind: 'opponent', opponentId: 'b1' })).toEqual([])
+  })
+  it('紅白戦の相手（Bチーム）は、相手の選択肢に出ない', () => {
+    const opts = scopeOptions('opponent', {
+      ...withScrimmage,
+      opponents: [...opponents, { id: 'b1', teamId: 't', name: '紅白戦（B チーム）' }],
+    })
+    expect(opts.map((o) => o.value)).not.toContain('b1')
+  })
+  it('splitPractice：紅白戦とサーブ練習に分ける（サーブ練習の指標に紅白戦のサーブを混ぜない）', () => {
+    const sets = recordsInScope({ kind: 'practice' }, withScrimmage)
+    const { scrimmage, drill } = splitPractice(sets, withScrimmage)
+    expect(scrimmage.map((r) => r.setId)).toEqual(['s5'])
+    expect(drill.map((r) => r.setId)).toEqual(['s4'])
+  })
+})
+
+describe('紅白戦：Bチームの部員（5 章「紅白戦の個人成績」、#71）', () => {
+  const sc: AnalysisData = {
+    ...data,
+    matches: [...data.matches, match('sc', { kind: 'scrimmage', opponentId: 'b1' })],
+    gameSets: [...data.gameSets, gameSet('s5', 'sc', 1)],
+    opponentPlayers: [{ id: 'b7', opponentId: 'b1', number: 7, playerId: 'p7' }],
+    records: [
+      ...data.records,
+      {
+        ...empty('s5'),
+        serves: [serve({ setId: 's5', serverId: 'p3', result: 'ace', reception: null, receiverId: 'b7' })],
+        // 相手サーバー b7（部員 p7）のサーブを受けた記録。b9 は部員と結ばれていない
+        receptions: [
+          {
+            kind: 'reception',
+            clientId: 'r1',
+            setId: 's5',
+            receiverId: 'p3',
+            oppServerId: 'b7',
+            oppServeType: null,
+            atX: null,
+            atY: null,
+            result: 'C',
+            recordedAt: '2026-11-05T00:00:00Z',
+          },
+          {
+            kind: 'reception',
+            clientId: 'r2',
+            setId: 's5',
+            receiverId: 'p3',
+            oppServerId: 'b9',
+            oppServeType: null,
+            atX: null,
+            atY: null,
+            result: 'ace',
+            recordedAt: '2026-11-05T00:00:00Z',
+          },
+        ],
+      },
+    ],
+  }
+  it('Bチームの記録を、その部員の記録として足す（部員と結ばれていない相手選手は入れない）', () => {
+    const { scrimmage } = splitPractice(recordsInScope({ kind: 'practice' }, sc), sc)
+    const r = scrimmage.find((x) => x.setId === 's5')
+    // サーブ：A の 1 本 ＋ B の部員 p7 の 1 本（C＝効果）。b9 は入らない
+    expect(r?.serves.map((x) => x.serverId)).toEqual(['p3', 'p7'])
+    // レシーブ：A の受けた 2 本 ＋ B の部員 p7 が受けた分（エースは受けた相手がないので 0 本）
+    expect(r?.receptions).toHaveLength(2)
+  })
+  it('部員の選手別表に A と B が合わさる', () => {
+    const { scrimmage } = splitPractice(recordsInScope({ kind: 'practice' }, sc), sc)
+    const t = playerTable('serve', scrimmage, sc.players)
+    // 渡辺（p7）は B のサーブ 1 本：C 1 本 → 効果 1 →（25）÷ 1 = 25%
+    const row = t.rows.find((x) => x.id === 'p7')
+    expect(row?.cells.map((c) => c.text)).toEqual(['1', '25.0%*', '0.0%*', '0.0%*'])
+  })
+  it('サーブの種類別の表には、種類が空の B のサーブを入れない（「その他」に混ぜない）', () => {
+    const parts = splitPractice(recordsInScope({ kind: 'practice' }, sc), sc)
+    // A の p3 のフローター 1 本 ＋ B の p7 の 1 本（種類が空）。種類別の表はフローターの行だけ
+    expect(serveTypeTable(parts.scrimmageForTypes).rows.map((r) => r.id)).toEqual(['float'])
+    // 全体と選手別の表には、種類が空の本数も入る
+    expect(parts.scrimmage.find((x) => x.setId === 's5')?.serves).toHaveLength(2)
+  })
+  it('opponentPlayers がなければ、Aの記録のまま', () => {
+    const none = { ...sc, opponentPlayers: undefined }
+    const { scrimmage } = splitPractice(recordsInScope({ kind: 'practice' }, none), none)
+    expect(scrimmage.find((x) => x.setId === 's5')?.serves).toHaveLength(1)
+  })
+  it('紅白戦のアタックの表は、効果率と失点の列を除く', () => {
+    const t = attackTableForScrimmage({
+      columns: ['打数', 'アタック決定率', '効果率', '失点'],
+      rows: [{ id: 'p7', label: '7 渡辺', cells: [1, 2, 3, 4].map((n) => ({ text: String(n), reference: false, negative: false })) }],
+    })
+    expect(t.columns).toEqual(['打数', 'アタック決定率'])
+    expect(t.rows[0]?.cells.map((c) => c.text)).toEqual(['1', '2'])
+  })
+})
+
+describe('セットごとの列の境目を分析に渡す（F-24）', () => {
+  // 相手コートの奥の列は左から 1・6・5。x = 0.35 は、3 等分なら中の列（6）、境目 [0.4, 0.8] なら左の列（1）
+  const gs = (id: string, o: Partial<GameSet> = {}): GameSet => ({ ...gameSet(id, 'm1', 1), ...o })
+  const sets: SetRecords[] = [
+    { ...empty('s1'), serves: [serve({ setId: 's1', toX: 0.35, toY: 0.9 })] },
+    { ...empty('s2'), serves: [serve({ setId: 's2', toX: 0.35, toY: 0.9 })] },
+  ]
+  const zoneText = (h: ReturnType<typeof heatmap>, zone: number) => h.cells.find((c) => c.zone === zone)?.text
+
+  it('splitsOfSets：両方そろっているセットだけ境目を返す', () => {
+    const splitsOf = splitsOfSets([gs('s1', { colSplit1: 0.4, colSplit2: 0.8 }), gs('s2'), gs('s3', { colSplit1: 0.4 })])
+    expect(splitsOf('s1')).toEqual([0.4, 0.8])
+    expect(splitsOf('s2')).toBeUndefined()
+    expect(splitsOf('s3')).toBeUndefined() // 片方だけは使わない
+    expect(splitsOf('none')).toBeUndefined()
+  })
+  it('コース割合：境目のあるセットは左の列(1)、ないセットは中の列(6)', () => {
+    const splitsOf = splitsOfSets([gs('s1', { colSplit1: 0.4, colSplit2: 0.8 }), gs('s2')])
+    const h = courseHeatmap('serve', sets, splitsOf)
+    expect(zoneText(h, 1)).toBe('50.0%*（1）')
+    expect(zoneText(h, 6)).toBe('50.0%*（1）')
+  })
+  it('ヒートマップ（サーブ効果率）も同じ境目で数える', () => {
+    const splitsOf = splitsOfSets([gs('s1', { colSplit1: 0.4, colSplit2: 0.8 }), gs('s2')])
+    const h = heatmap('serve', sets, splitsOf)
+    expect(h.cells.find((c) => c.zone === 1)?.count).toBe(1)
+    expect(h.cells.find((c) => c.zone === 6)?.count).toBe(1)
+  })
+  it('境目を渡さなければ、これまでどおり 3 等分', () => {
+    expect(zoneText(courseHeatmap('serve', sets), 6)).toBe('100.0%*（2）')
+  })
+})
+
+describe('選手での絞り込みと着弾点の散布図（F-22、T-26）', () => {
+  // p7 のサーブ：着弾 (0.1, 0.9)・(0.5, 0.9)・ネット（着弾点なし）。p3 のサーブ：着弾 (0.9, 0.1)。p7 が 1 本受けた
+  const sets: SetRecords[] = [
+    {
+      ...empty('s1'),
+      serves: [
+        serve({ serverId: 'p7', toX: 0.1, toY: 0.9 }),
+        serve({ serverId: 'p7', toX: 0.5, toY: 0.9 }),
+        serve({ serverId: 'p7', toX: null, toY: null, result: 'miss', missType: 'net', reception: null }),
+        serve({ serverId: 'p3', toX: 0.9, toY: 0.1 }),
+      ],
+      receptions: [
+        {
+          kind: 'reception',
+          clientId: 'r1',
+          setId: 's1',
+          receiverId: 'p7',
+          oppServerId: null,
+          oppServeType: null,
+          atX: null,
+          atY: null,
+          result: 'A',
+          recordedAt: '2026-11-05T00:00:00Z',
+        },
+      ],
+    },
+  ]
+  const colors = new Map([
+    ['p7', '#1e3a8a'],
+    ['p3', '#0f766e'],
+  ])
+
+  it('playerOptions：記録のある選手を背番号順に。アタックにはない', () => {
+    expect(playerOptions('serve', sets, players)).toEqual([
+      { id: 'p3', label: '3 佐藤' },
+      { id: 'p7', label: '7 渡辺' },
+    ])
+    expect(playerOptions('reception', sets, players)).toEqual([{ id: 'p7', label: '7 渡辺' }])
+    expect(playerOptions('attack', sets, players)).toEqual([])
+  })
+  it('filterByPlayer：サーブはサーバー、レシーブはレシーバーで絞る。null は全員', () => {
+    expect(filterByPlayer('serve', sets, 'p3')[0]?.serves).toHaveLength(1)
+    expect(filterByPlayer('serve', sets, null)[0]?.serves).toHaveLength(4)
+    expect(filterByPlayer('reception', sets, 'p3')[0]?.receptions).toHaveLength(0)
+    expect(filterByPlayer('reception', sets, 'p7')[0]?.receptions).toHaveLength(1)
+    expect(filterByPlayer('attack', sets, 'p3')[0]?.serves).toHaveLength(4)
+  })
+  it('絞るとヒートマップの本数が絞られる（p7 の着弾 2 本 → 左奥(1)と中奥(6)に 1 本ずつ）', () => {
+    const h = heatmap('serve', filterByPlayer('serve', sets, 'p7'))
+    const count = (zone: number) => h.cells.find((c) => c.zone === zone)?.count
+    expect(count(1)).toBe(1)
+    expect(count(6)).toBe(1)
+    expect(count(4)).toBe(0) // p3 の着弾は入らない
+    expect(heatmap('serve', sets).cells.find((c) => c.zone === 4)?.count).toBe(1)
+  })
+  it('serveScatter：着弾点のある 3 本を、選手の色と背番号つきで。ネットは描かない', () => {
+    const sc = serveScatter(sets, players, colors)
+    expect(sc.marks).toEqual([
+      { x: 0.1, y: 0.9, color: '#1e3a8a', label: '7' },
+      { x: 0.5, y: 0.9, color: '#1e3a8a', label: '7' },
+      { x: 0.9, y: 0.1, color: '#0f766e', label: '3' },
+    ])
+    expect(sc.legend).toEqual([
+      { id: 'p3', label: '3 佐藤', color: '#0f766e' },
+      { id: 'p7', label: '7 渡辺', color: '#1e3a8a' },
+    ])
+  })
+  it('serveScatter：絞った記録なら、その選手の点だけ', () => {
+    const sc = serveScatter(filterByPlayer('serve', sets, 'p3'), players, colors)
+    expect(sc.marks).toHaveLength(1)
+    expect(sc.legend.map((l) => l.id)).toEqual(['p3'])
   })
 })

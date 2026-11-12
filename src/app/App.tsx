@@ -4,6 +4,7 @@ import { AuthGate } from '../features/auth/AuthGate.tsx'
 import { DEMO_MATCH, DEMO_PRACTICE } from '../features/record/demo.ts'
 import RecordTab from '../features/record/RecordTab.tsx'
 import AnalysisTab from './AnalysisTab.tsx'
+import BoardTab from './BoardTab.tsx'
 import { backend, type Backend } from './backend.ts'
 import InstallGuide from './InstallGuide.tsx'
 import TabBar from './TabBar.tsx'
@@ -71,6 +72,7 @@ export function Shell({ b }: { b: Backend }) {
         onChooseMatch={() => select('admin')}
       />
     ),
+    board: <BoardTab loadTeam={b.loadTeam} active={tab === 'board'} />,
     admin: b.kind === 'demo' ? <DemoAdmin /> : <AdminScreen data={b.teamData} onOpenMatch={openMatch} />,
   }
 

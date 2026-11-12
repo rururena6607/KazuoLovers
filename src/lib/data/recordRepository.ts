@@ -81,6 +81,7 @@ function applyOp(sets: SetRecords[], op: Op): SetRecords[] | null {
     serves: without(s.serves, clientId),
     receptions: without(s.receptions, clientId),
     attacks: without(s.attacks, clientId),
+    oppAttacks: without(s.oppAttacks ?? [], clientId),
     points: without(s.points, clientId),
   }))
   if (op.type === 'remove') return removed
@@ -96,6 +97,9 @@ function applyOp(sets: SetRecords[], op: Op): SetRecords[] | null {
       break
     case 'attack':
       target.attacks = [...target.attacks, rec].sort(byTime)
+      break
+    case 'opp_attack':
+      target.oppAttacks = [...(target.oppAttacks ?? []), rec].sort(byTime)
       break
     case 'point':
       target.points = [...target.points, rec].sort(byTime)

@@ -20,6 +20,7 @@ import {
   type ServeStats,
   type ServeType,
   type SetRecords,
+  type Speed,
 } from '../../contracts/index.ts'
 import {
   attackStatsOf,
@@ -32,10 +33,22 @@ import {
 type CourtSide = keyof typeof ZONES
 
 /** 座標からゾーン番号を返す関数（lib/court の zoneOf）。アウトとネットは null */
-export type ZoneOf = (side: CourtSide, x: number | null, y: number | null) => number | null
+export type ZoneOf = (
+  side: CourtSide,
+  x: number | null,
+  y: number | null,
+  colSplits?: readonly [number, number],
+) => number | null
+
+/**
+ * セットの id から、そのセットの相手コートの列の境目（F-24）を返す関数。なければ undefined（3 等分）。
+ * 相手コートのゾーンを使う集計に、省略できる引数として渡す。呼ぶ側は GameSet の colSplit1・colSplit2 から作る
+ */
+export type SplitsOf = (setId: string) => readonly [number, number] | undefined
 
 const SERVE_TYPE_ORDER: readonly ServeType[] = ['float', 'jump_float', 'jump', 'other']
 const ATTACK_TYPE_ORDER: readonly AttackType[] = ['left', 'center', 'right', 'back', 'other']
+const SPEED_ORDER: readonly Speed[] = ['fast', 'slow']
 const GRADE_ORDER: readonly Grade[] = ['A', 'B', 'C', 'D']
 
 /** ヒートマップに並べるゾーン（番号順）。ZONES から求める */
@@ -93,6 +106,10 @@ export const serveStatsByPlayer = (serves: readonly ServeRecord[]): Map<string, 
 export const serveStatsByType = (serves: readonly ServeRecord[]): Map<ServeType, ServeStats> =>
   inOrder(mapValues(groupBy(serves, (s) => s.serveType), serveStatsOf), SERVE_TYPE_ORDER)
 
+/** 速さ別（F-26）。速さを入れなかった本数は、どちらにも入れない。記録のある速さだけ、速い・遅いの順に返す */
+export const serveStatsBySpeed = (serves: readonly ServeRecord[]): Map<Speed, ServeStats> =>
+  inOrder(mapValues(groupBy(serves, (s) => s.speed ?? null), serveStatsOf), SPEED_ORDER)
+
 /** 打つ位置別。エンドライン上の位置を自コート奥のゾーン（ZONES.own.back の順）に分ける。位置なしは入れない */
 export const serveStatsByFromZone = (
   serves: readonly ServeRecord[],
@@ -104,8 +121,9 @@ export const serveStatsByFromZone = (
 export const serveStatsByLandingZone = (
   serves: readonly ServeRecord[],
   zoneOf: ZoneOf,
+  splitsOf?: SplitsOf,
 ): Map<number, ServeStats> =>
-  fixedKeys(serves, ZONE_NUMBERS, (s) => zoneOf('opponent', s.toX, s.toY), serveStatsOf)
+  fixedKeys(serves, ZONE_NUMBERS, (s) => zoneOf('opponent', s.toX, s.toY, splitsOf?.(s.setId)), serveStatsOf)
 
 /**
  * 相手選手別のサーブレシーブ成功率。自チームのサーブで、受けた相手選手（receiverId）が入っている分だけ。
@@ -158,6 +176,10 @@ export const attackStatsByPlayer = (attacks: readonly AttackRecord[]): Map<strin
 
 export const attackStatsByType = (attacks: readonly AttackRecord[]): Map<AttackType, AttackStats> =>
   inOrder(mapValues(groupBy(attacks, (a) => a.attackType), attackStatsOf), ATTACK_TYPE_ORDER)
+
+/** 速さ別（F-26）。速さを入れなかった本数は、どちらにも入れない。記録のある速さだけ、速い・遅いの順に返す */
+export const attackStatsBySpeed = (attacks: readonly AttackRecord[]): Map<Speed, AttackStats> =>
+  inOrder(mapValues(groupBy(attacks, (a) => a.speed ?? null), attackStatsOf), SPEED_ORDER)
 
 /** 前のサーブレシーブの評価（A〜D）別。切り返しのアタックは入れない */
 export const attackStatsByPrevReception = (

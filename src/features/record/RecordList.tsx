@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { OpponentPlayer, Player } from '../../contracts/index.ts'
 import { describeEntry, editableGrade, withGrade, type Entry } from './history.ts'
 import { GRADES } from './labels.ts'
+import type { ColSplits } from '../../lib/court/index.ts'
 
 // 記録一覧（F-08）。新しい順に並べ、削除と評価（A〜D）の修正ができる。
 // 得点が変わる修正（エース↔イン など）は、削除して記録し直す。
@@ -10,12 +11,22 @@ interface Props {
   entries: readonly Entry[]
   players: readonly Player[]
   oppPlayers: readonly OpponentPlayer[]
+  /** そのセットの相手コートの列の境目（着弾ゾーンの表示。F-24） */
+  colSplits?: ColSplits
   onRemove: (entry: Entry) => void
   onEdit: (entry: Entry) => void
   onClose: () => void
 }
 
-export default function RecordList({ entries, players, oppPlayers, onRemove, onEdit, onClose }: Props) {
+export default function RecordList({
+  entries,
+  players,
+  oppPlayers,
+  colSplits,
+  onRemove,
+  onEdit,
+  onClose,
+}: Props) {
   const [editing, setEditing] = useState<string | null>(null)
   const newestFirst = [...entries].reverse()
 
@@ -33,7 +44,7 @@ export default function RecordList({ entries, players, oppPlayers, onRemove, onE
           return (
             <li key={e.clientId} className="list-item">
               <div className="list-main">
-                <span className="num">{describeEntry(e, players, oppPlayers)}</span>
+                <span className="num">{describeEntry(e, players, oppPlayers, colSplits)}</span>
                 {grade !== null && (
                   <button
                     type="button"

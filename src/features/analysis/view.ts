@@ -5,16 +5,27 @@ import type {
   GameSet,
   Match,
   Opponent,
+  OpponentPlayer,
   Player,
   ReceptionStats,
   ServeStats,
   ServeType,
   SetRecords,
+  Speed,
 } from '../../contracts/index.ts'
+import type { CourtMark } from '../../components/Court.tsx'
 import { zoneOf } from '../../lib/court/index.ts'
 import {
   attackStatsByPlayer,
+  attackStatsBySpeed,
+  bTeamAttacks,
+  bTeamReceptions,
+  bTeamServes,
+  oppPlayerMapOf,
   attackStatsOf,
+  digLandingShare,
+  digOriginShare,
+  digStatsOf,
   practiceStatsByPlayer,
   practiceStatsByTargetZone,
   practiceStatsOf,
@@ -25,9 +36,11 @@ import {
   serveLandingShare,
   serveStatsByLandingZone,
   serveStatsByPlayer,
+  serveStatsBySpeed,
   serveStatsByType,
   serveStatsOf,
   type PracticeStats,
+  type SplitsOf,
 } from '../../lib/stats/index.ts'
 import { formatRate, formatZoneCell, isNegativeShown, isReference } from './format.ts'
 
@@ -37,11 +50,29 @@ export interface AnalysisData {
   matches: readonly Match[]
   gameSets: readonly GameSet[]
   records: readonly SetRecords[]
+  /**
+   * 相手選手。紅白戦のBチームの選手（playerId で部員と結ぶ）の成績を出すのに使う（F-27）。
+   * なければ（またはBチームの選手がいなければ）、紅白戦はAチーム側の記録だけで集計する
+   */
+  opponentPlayers?: readonly OpponentPlayer[]
 }
 
 /**
- * 範囲の選択。all は試合（kind = match）すべて、practice は練習（kind = practice）すべて。
- * 練習は公式の指標と物差しが違うので、全体には混ぜない。
+ * セットごとの列の境目（F-24）。GameSet の colSplit1・colSplit2 が両方あるセットだけ、その値を返す。
+ * 相手コートのゾーンを使う集計（着弾ゾーン別・コース割合・相手のスパイクの打つ位置）に、この関数を渡す。
+ * 正しくない値（0 ≤ 左 < 右 ≤ 1 でない）は、lib/court の zoneOf が 3 等分に戻す
+ */
+export function splitsOfSets(gameSets: readonly GameSet[]): SplitsOf {
+  const bySet = new Map<string, readonly [number, number]>()
+  for (const gs of gameSets) {
+    if (gs.colSplit1 !== undefined && gs.colSplit2 !== undefined) bySet.set(gs.id, [gs.colSplit1, gs.colSplit2])
+  }
+  return (setId) => bySet.get(setId)
+}
+
+/**
+ * 範囲の選択。all は試合（kind = match）すべて、practice は練習（kind = practice）と紅白戦（kind = scrimmage）すべて。
+ * 練習と紅白戦は公式の指標と物差しが違うので、試合の全体・相手には混ぜない（要件定義書 5 章「紅白戦の個人成績」）。
  */
 export type Scope =
   | { kind: 'all' }
@@ -80,7 +111,7 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
       case 'all':
         return match.kind === 'match'
       case 'practice':
-        return match.kind === 'practice'
+        return match.kind === 'practice' || match.kind === 'scrimmage'
       case 'match':
         return match.id === scope.matchId
       case 'set':
@@ -90,6 +121,68 @@ export function recordsInScope(scope: Scope, data: AnalysisData): SetRecords[] {
     }
   }
   return data.records.filter((r) => inScope(r.setId))
+}
+
+/**
+ * 範囲「練習」の記録を、紅白戦とサーブ練習に分ける（5 章）。紅白戦は試合と同じ指標で、サーブ練習は成功率・ゾーン的中率で出す。
+ * 紅白戦のサーブには狙ったゾーンがなく、結果が ace／in／miss なので、サーブ練習の指標には混ぜない
+ */
+export function splitPractice(
+  sets: readonly SetRecords[],
+  data: AnalysisData,
+): { scrimmage: SetRecords[]; scrimmageForTypes: SetRecords[]; drill: SetRecords[] } {
+  const matchById = new Map(data.matches.map((m) => [m.id, m]))
+  const kindOfSet = new Map(data.gameSets.map((gs) => [gs.id, matchById.get(gs.matchId)?.kind]))
+  const members = oppPlayerMapOf(data.opponentPlayers ?? [])
+  const scrimmageSets = sets.filter((r) => kindOfSet.get(r.setId) === 'scrimmage')
+  return {
+    scrimmage: scrimmageSets.map((r) => withBTeam(r, members)),
+    // サーブの種類別の表用。Bのサーブは種類が記録された本数だけ（空の本数を「その他」に混ぜない）
+    scrimmageForTypes: scrimmageSets.map((r) => withBTeam(r, members, true)),
+    drill: sets.filter((r) => kindOfSet.get(r.setId) === 'practice'),
+  }
+}
+
+/**
+ * 紅白戦の記録に、Bチームの成績を足す（5 章「紅白戦の個人成績」）。Bの記録は、Aの記録を裏返したものを
+ * 「その部員の記録」の形に読み替えて足す（lib/stats の bTeamServes など）。部員が分かる本数だけが入る
+ */
+function withBTeam(
+  r: SetRecords,
+  members: ReturnType<typeof oppPlayerMapOf>,
+  knownTypeOnly = false,
+): SetRecords {
+  if (members.size === 0) return r
+  return {
+    ...r,
+    serves: [...r.serves, ...bTeamServes(r.receptions, members, { knownTypeOnly })],
+    receptions: [...r.receptions, ...bTeamReceptions(r.serves, members)],
+    attacks: [...r.attacks, ...bTeamAttacks(r.oppAttacks ?? [], members)],
+  }
+}
+
+/** 紅白戦の画面の注。Aチーム側とBチーム側の記録を、その部員の成績に入れている（5 章「紅白戦の個人成績」） */
+export const SCRIMMAGE_NOTE =
+  '紅白戦は、Aチーム側とBチーム側の記録を、その部員の成績として集計しています。Bチームの成績は、相手サーバー・受けた相手・打った相手選手が入っている記録だけが入ります（入っていない記録はどの部員にも入りません）。'
+
+/** レシーブのタブの注。Bチームのエースとミスは受けた相手が記録されないので、受数に入らない */
+export const SCRIMMAGE_RECEPTION_NOTE =
+  'Bチームのサーブレシーブ成功率は、受けた相手が記録されたA〜Dの本数だけなので、少し高めに出ることがあります（被エースは入りません）。'
+
+/** アタックのタブの注。被ブロックの記録がないので、Bチームの効果率と失点は出さない */
+export const SCRIMMAGE_ATTACK_NOTE =
+  'アタックは、Bチームに被ブロックの記録がないため、打数とアタック決定率だけを出しています。'
+
+/** 紅白戦のアタックの表から、効果率と失点の列を除く（Bチームの被ブロックが記録されないため） */
+const ATTACK_HIDDEN = new Set(['効果率', '失点'])
+export const attackMetricsForScrimmage = (metrics: readonly Metric[]): Metric[] =>
+  metrics.filter((m) => !ATTACK_HIDDEN.has(m.label))
+export function attackTableForScrimmage(t: Table): Table {
+  const keep = t.columns.map((c) => !ATTACK_HIDDEN.has(c))
+  return {
+    columns: t.columns.filter((_, i) => keep[i]),
+    rows: t.rows.map((r) => ({ ...r, cells: r.cells.filter((_, i) => keep[i]) })),
+  }
 }
 
 // ---- 表示用の値 ----
@@ -246,6 +339,115 @@ export function serveTypeTable(sets: readonly SetRecords[]): Table {
   }
 }
 
+export const SPEED_LABELS: Record<Speed, string> = { fast: '速い', slow: '遅い' }
+
+/**
+ * 速さ別の表（F-26）。サーブ・アタックの全体指標と同じ式で出す（5 章「速さ別の成績」）。
+ * 速さを入れなかった本数は、どちらにも入れない。速さを入れた記録がなければ null（レシーブにはない）
+ */
+export function speedTable(tab: Tab, sets: readonly SetRecords[]): Table | null {
+  const rowsOf = <S,>(by: Map<Speed, S>, cellsOf: (s: S) => Cells): TableRow[] =>
+    [...by].map(([speed, s]) => ({ id: speed, label: SPEED_LABELS[speed], cells: cellsOf(s).cells }))
+  switch (tab) {
+    case 'serve': {
+      const rows = rowsOf(serveStatsBySpeed(flat.serves(sets)), serveCells)
+      return rows.length === 0 ? null : { columns: SERVE_COLUMNS, rows }
+    }
+    case 'attack': {
+      const rows = rowsOf(attackStatsBySpeed(flat.attacks(sets)), attackCells)
+      return rows.length === 0 ? null : { columns: ATTACK_COLUMNS, rows }
+    }
+    case 'reception':
+      return null
+  }
+}
+
+/** 速さ別の表の注。速さは任意項目なので、入れなかった本数は含まれない */
+export const SPEED_NOTE = '速さ別は、速さを入力した本数だけで集計しています（入力していない本数は含めません）。'
+
+// ---- 選手での絞り込みと着弾点の散布図（F-22、T-26） ----
+
+export interface PlayerOption {
+  id: string
+  /** 「7 渡辺」 */
+  label: string
+}
+
+/** 絞り込みの対象にする選手の id。サーブ：サーバー、レシーブ：レシーバー。アタックには絞り込みがない */
+const playerIdOf = {
+  serve: (s: SetRecords) => s.serves.map((r) => r.serverId),
+  reception: (s: SetRecords) => s.receptions.flatMap((r) => (r.receiverId === null ? [] : [r.receiverId])),
+}
+
+/** 範囲に記録のある選手（背番号順）。絞り込みの選択肢 */
+export function playerOptions(
+  tab: Tab,
+  sets: readonly SetRecords[],
+  players: readonly Player[],
+): PlayerOption[] {
+  if (tab === 'attack') return []
+  const byId = new Map(players.map((p) => [p.id, p]))
+  const ids = [...new Set(sets.flatMap(playerIdOf[tab]))].sort(byNumber(players))
+  return ids.map((id) => ({ id, label: playerLabel(byId.get(id)) }))
+}
+
+/**
+ * 選手で絞った記録。サーブはサーバー、レシーブはレシーバーで絞る。playerId が null なら全員。
+ * ヒートマップ・コース割合・散布図に渡す（全体指標と表は絞らない）
+ */
+export function filterByPlayer(
+  tab: Tab,
+  sets: readonly SetRecords[],
+  playerId: string | null,
+): SetRecords[] {
+  if (playerId === null || tab === 'attack') return [...sets]
+  return sets.map((s) =>
+    tab === 'serve'
+      ? { ...s, serves: s.serves.filter((r) => r.serverId === playerId) }
+      : { ...s, receptions: s.receptions.filter((r) => r.receiverId === playerId) },
+  )
+}
+
+export interface Scatter {
+  /** 相手コート上の着弾点。選手ごとの色の点に背番号を書く */
+  marks: CourtMark[]
+  /** 凡例（色と「7 渡辺」）。点のある選手だけ、背番号順 */
+  legend: { id: string; label: string; color: string }[]
+}
+
+/**
+ * サーブの着弾点の散布図（F-22）。着弾点のないサーブ（ネット）は描かない。アウトの点は、コートの外に描く。
+ * 色は playerColorMap（記録画面と同じ）。色だけに頼らず、点の中に背番号を書く
+ */
+export function serveScatter(
+  sets: readonly SetRecords[],
+  players: readonly Player[],
+  colors: ReadonlyMap<string, string>,
+): Scatter {
+  const numberOf = new Map(players.map((p) => [p.id, p.number]))
+  const marks: CourtMark[] = []
+  const used = new Set<string>()
+  for (const s of flat.serves(sets)) {
+    const color = colors.get(s.serverId)
+    const number = numberOf.get(s.serverId)
+    if (s.toX === null || s.toY === null || color === undefined || number === undefined) continue
+    marks.push({ x: s.toX, y: s.toY, color, label: String(number) })
+    used.add(s.serverId)
+  }
+  const byId = new Map(players.map((p) => [p.id, p]))
+  return {
+    marks,
+    legend: [...used].sort(byNumber(players)).flatMap((id) => {
+      const color = colors.get(id)
+      return color === undefined ? [] : [{ id, label: playerLabel(byId.get(id)), color }]
+    }),
+  }
+}
+
+/** 散布図の注。点は座標のままで、線は 3 等分（セットごとの境目は、ヒートマップとコース割合に使う） */
+export const SCATTER_NOTE =
+  '散布図は、着弾点を記録したサーブの位置です（コートの外のアウトも描き、ネットは除く）。ゾーンの線は 3 等分で、セットごとの列の境目は、ヒートマップとコース割合に使っています。'
+
 // ---- ヒートマップ ----
 
 export interface HeatCell {
@@ -295,9 +497,13 @@ function makeHeatmap(side: Heatmap['side'], metric: string, values: ZoneValue[])
  * アタックのヒートマップはない（着弾点は任意項目で、F-11 にも求められていない）。
  * 6 ゾーンすべてを返す（lib/stats が 0 本のゾーンも入れる）
  */
-export function heatmap(tab: 'serve' | 'reception', sets: readonly SetRecords[]): Heatmap {
+export function heatmap(
+  tab: 'serve' | 'reception',
+  sets: readonly SetRecords[],
+  splitsOf?: SplitsOf,
+): Heatmap {
   if (tab === 'serve') {
-    const by = serveStatsByLandingZone(flat.serves(sets), zoneOf)
+    const by = serveStatsByLandingZone(flat.serves(sets), zoneOf, splitsOf)
     return makeHeatmap(
       'opponent',
       'サーブ効果率',
@@ -318,10 +524,14 @@ export function heatmap(tab: 'serve' | 'reception', sets: readonly SetRecords[])
  * レシーブ：自コートの受けた位置別（相手がどこに打ってくるか）。アタックにはない。
  * セルの本数はそのゾーンの本数で、10 本未満には「*」を付ける（ほかのヒートマップと同じ決まり）
  */
-export function courseHeatmap(tab: 'serve' | 'reception', sets: readonly SetRecords[]): Heatmap {
+export function courseHeatmap(
+  tab: 'serve' | 'reception',
+  sets: readonly SetRecords[],
+  splitsOf?: SplitsOf,
+): Heatmap {
   const share =
     tab === 'serve'
-      ? serveLandingShare(flat.serves(sets), zoneOf)
+      ? serveLandingShare(flat.serves(sets), zoneOf, splitsOf)
       : receptionPositionShare(flat.receptions(sets), zoneOf)
   return makeHeatmap(
     tab === 'serve' ? 'opponent' : 'own',
@@ -335,6 +545,45 @@ export const COURSE_NOTES = {
   serve: 'コース割合は、着弾点を記録したサーブに対する割合です（コートの外のアウトは含み、ネットは除く）。',
   reception: 'コース割合は、受けた位置を記録したレシーブに対する割合です。',
 } as const
+
+// ---- 相手のスパイク（F-25） ----
+
+export interface DigView {
+  /** 本数・拾えた率・拾えず・相手ミス */
+  metrics: Metric[]
+  /** 落ちた位置の割合（自コート） */
+  landing: Heatmap
+  /** 打ってくる位置の割合（相手コート） */
+  origin: Heatmap
+}
+
+/**
+ * 相手のスパイクの分析（要件定義書 5 章「相手のスパイク」）。
+ * 拾えた率 = 拾えた（A〜D）÷（拾えた ＋ 拾えず）。相手ミスは分母に入れない（分母の本数が 10 本未満なら「*」）。
+ * 位置の割合は、位置を記録した本数に対するそのゾーンの割合
+ */
+export function digView(sets: readonly SetRecords[], splitsOf?: SplitsOf): DigView {
+  const records = sets.flatMap((s) => s.oppAttacks ?? [])
+  const stats = digStatsOf(records)
+  const landing = digLandingShare(records, zoneOf)
+  const origin = digOriginShare(records, zoneOf, splitsOf)
+  const toValues = (share: typeof landing): ZoneValue[] =>
+    [...share.zones].map(([zone, z]) => ({ zone, value: z.share, count: z.count }))
+  return {
+    metrics: [
+      { label: '相手のスパイク', cell: countCell(stats.total) },
+      { label: '拾えた率', cell: rateCell(stats.digRate, stats.dug + stats.killed) },
+      { label: '拾えず', cell: countCell(stats.killed) },
+      { label: '相手ミス', cell: countCell(stats.oppError) },
+    ],
+    landing: makeHeatmap('own', '落ちた位置の割合', toValues(landing)),
+    origin: makeHeatmap('opponent', '打ってくる位置の割合', toValues(origin)),
+  }
+}
+
+/** 相手のスパイクの分母の説明（画面の注） */
+export const DIG_NOTE =
+  '拾えた率は、拾えた（A〜D）÷（拾えた＋拾えず）です（相手ミスは含めません）。位置の割合は、位置を記録したスパイクに対する割合です。'
 
 // ---- 練習 ----
 
