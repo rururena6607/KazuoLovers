@@ -10,6 +10,15 @@ import type {
   Player,
   Team,
 } from '../../contracts/index.ts'
+import {
+  checkInviteCode,
+  inviteInfoFromRow,
+  joinPreviewFromRow,
+  normalizeInviteCode,
+  teamFromJoinRow,
+  type InviteInfo,
+  type JoinPreview,
+} from './invite.ts'
 import { getSupabase } from './supabaseClient.ts'
 import {
   COLUMNS,
@@ -57,6 +66,17 @@ export interface TeamData {
   myTeam(): Promise<Team | null>
   /** チームを作り、作った人を管理者にする */
   createTeam(name: string): Promise<Team>
+  /** 招待コード（T-43）。管理者でなければ isAdmin が false */
+  inviteInfo(teamId: string): Promise<InviteInfo>
+  /** 招待コードを発行・再発行する（管理者だけ）。前のコードは使えなくなる */
+  regenerateInviteCode(teamId: string): Promise<string>
+  /** 参加する前の確認：入るチームと、抜けるチーム・消えるチーム。コードが違えば reject する */
+  previewJoin(code: string): Promise<JoinPreview>
+  /**
+   * 招待コードのチームに部員として参加し、前のチームから抜ける。
+   * 管理者が自分だけのチームは消える。そのときは allowDelete を true にしないと reject する
+   */
+  joinTeam(code: string, allowDelete: boolean): Promise<Team>
   listPlayers(teamId: string): Promise<Player[]>
   /** id があれば直し、なければ作る */
   savePlayer(teamId: string, input: PlayerInput): Promise<Player>
@@ -172,6 +192,24 @@ export function createSupabaseTeamData(getClient: () => SupabaseClient): TeamDat
       const id: unknown = check(await db().rpc('create_team', { team_name: teamName }))
       if (typeof id !== 'string') throw new Error('チームを作れませんでした。')
       return { id, name: teamName }
+    },
+    async inviteInfo(teamId) {
+      return inviteInfoFromRow(check(await db().rpc('invite_info', { t: teamId })))
+    },
+    async regenerateInviteCode(teamId) {
+      const code: unknown = check(await db().rpc('regenerate_invite_code', { t: teamId }))
+      if (typeof code !== 'string') throw new Error('招待コードを発行できませんでした。')
+      return code
+    },
+    async previewJoin(text) {
+      const code = normalizeInviteCode(text)
+      fail(checkInviteCode(code))
+      return joinPreviewFromRow(check(await db().rpc('preview_join', { code })))
+    },
+    async joinTeam(text, allowDelete) {
+      const code = normalizeInviteCode(text)
+      fail(checkInviteCode(code))
+      return teamFromJoinRow(check(await db().rpc('join_team', { code, allow_delete: allowDelete })))
     },
     listPlayers,
     async savePlayer(teamId, input) {

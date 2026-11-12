@@ -1,7 +1,10 @@
-// 管理画面（T-10）：チームがなければ作り、あれば試合・選手・相手チームを管理する。F-02〜F-05。
+// 管理画面（T-10）：チームがなければ作るか招待コードで参加し、あれば試合・選手・相手チームを管理する。F-02〜F-05。
+// 招待コード（T-43）：管理者はコードを発行し、部員はコードでほかのチームに移れる。
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import type { Opponent, Team } from '../../contracts/index.ts'
 import type { TeamData } from '../../lib/data/teamData.ts'
+import { InviteSection } from './InviteSection.tsx'
+import { JoinForm } from './JoinForm.tsx'
 import { MatchesSection } from './MatchesSection.tsx'
 import { OpponentsSection } from './OpponentsSection.tsx'
 import { PlayersSection } from './PlayersSection.tsx'
@@ -52,7 +55,7 @@ export function AdminScreen({ data, onOpenMatch }: Props) {
     )
   }
 
-  if (team === null) return <TeamSetup data={data} onCreated={setTeam} />
+  if (team === null) return <TeamSetup data={data} onCreated={setTeam} onJoined={reloadApp} />
 
   return (
     <div className="admin">
@@ -66,12 +69,32 @@ export function AdminScreen({ data, onOpenMatch }: Props) {
         onAdded={(o) => setOpponents((list) => [...list, o].sort((a, b) => a.name.localeCompare(b.name, 'ja')))}
         onDeleted={(id) => setOpponents((list) => list.filter((o) => o.id !== id))}
       />
+      <InviteSection data={data} teamId={team.id} />
+      <section className="admin-section">
+        <h2>ほかのチームに移る</h2>
+        <p className="admin-mute">移る先の管理者から招待コードをもらって入れます。いまの「{team.name}」からは抜けます。</p>
+        <JoinForm data={data} onJoined={reloadApp} />
+      </section>
     </div>
   )
 }
 
-/** まだどのチームにも入っていないとき。チームを作った人が管理者になる */
-function TeamSetup({ data, onCreated }: { data: TeamData; onCreated: (team: Team) => void }) {
+/**
+ * チームに入った・移ったら、アプリを読み直す。記録・分析のタブも、新しいチームの選手と試合で開き直すため
+ * （タブの切り替えは src/app にあり、ここからは触らない）
+ */
+const reloadApp = () => window.location.reload()
+
+/** まだどのチームにも入っていないとき。チームを作った人が管理者になる。部員は招待コードで参加する */
+function TeamSetup({
+  data,
+  onCreated,
+  onJoined,
+}: {
+  data: TeamData
+  onCreated: (team: Team) => void
+  onJoined: (team: Team) => void
+}) {
   const [name, setName] = useState('')
   const { busy, error, run } = useAction()
 
@@ -82,10 +105,13 @@ function TeamSetup({ data, onCreated }: { data: TeamData; onCreated: (team: Team
 
   return (
     <div className="admin">
-      <h1>チームを作る</h1>
+      <h1>チームに入る</h1>
       <p className="admin-mute">
-        まだチームに入っていません。管理者はここでチームを作ります。部員は、管理者からの招待（T-43）を待ってください。
+        まだチームに入っていません。部員は、管理者から届いた招待コードで参加します。管理者は、ここでチームを作ります。
       </p>
+      <h2>招待コードで参加する</h2>
+      <JoinForm data={data} onJoined={onJoined} />
+      <h2>チームを作る（管理者）</h2>
       <form className="admin-form" onSubmit={onSubmit}>
         <label>
           チーム名
