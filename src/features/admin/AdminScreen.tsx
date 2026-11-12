@@ -64,6 +64,7 @@ export function AdminScreen({ data, onOpenMatch }: Props) {
         teamId={team.id}
         opponents={opponents}
         onAdded={(o) => setOpponents((list) => [...list, o].sort((a, b) => a.name.localeCompare(b.name, 'ja')))}
+        onDeleted={(id) => setOpponents((list) => list.filter((o) => o.id !== id))}
       />
     </div>
   )

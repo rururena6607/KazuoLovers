@@ -9,13 +9,16 @@ interface Props {
   teamId: string
   opponents: Opponent[]
   onAdded: (opponent: Opponent) => void
+  onDeleted: (opponentId: string) => void
 }
 
-export function OpponentsSection({ data, teamId, opponents, onAdded }: Props) {
+export function OpponentsSection({ data, teamId, opponents, onAdded, onDeleted }: Props) {
   const [name, setName] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
   const [numbers, setNumbers] = useState<OpponentPlayer[]>([])
   const [numberText, setNumberText] = useState('')
+  /** 削除の確認を出している相手チーム（押し間違いで消さないよう、2 回押す） */
+  const [confirmId, setConfirmId] = useState<string | null>(null)
   const { busy, error, run } = useAction()
 
   const onAdd = (e: FormEvent) => {
@@ -35,6 +38,15 @@ export function OpponentsSection({ data, teamId, opponents, onAdded }: Props) {
     setNumbers([])
     setNumberText('')
     void run(async () => setNumbers(await data.listOpponentPlayers(id)))
+  }
+
+  const onDelete = (id: string) => {
+    void run(async () => {
+      await data.deleteOpponent(id)
+      setConfirmId(null)
+      if (openId === id) setOpenId(null)
+      onDeleted(id)
+    })
   }
 
   const onAddNumber = (e: FormEvent) => {
@@ -57,15 +69,37 @@ export function OpponentsSection({ data, teamId, opponents, onAdded }: Props) {
       <ul className="admin-list">
         {opponents.map((o) => (
           <li key={o.id} className="admin-col">
-            <button
-              type="button"
-              className="btn admin-row-button"
-              aria-expanded={openId === o.id}
-              onClick={() => toggle(o.id)}
-            >
-              {o.name}
-              <span aria-hidden="true">{openId === o.id ? '▲' : '▼'}</span>
-            </button>
+            <div className="admin-inline">
+              <button
+                type="button"
+                className="btn admin-row-button admin-grow"
+                aria-expanded={openId === o.id}
+                onClick={() => toggle(o.id)}
+              >
+                {o.name}
+                <span aria-hidden="true">{openId === o.id ? '▲' : '▼'}</span>
+              </button>
+              {confirmId === o.id ? (
+                <>
+                  <span className="admin-error">背番号もすべて消えます。</span>
+                  <button type="button" className="btn admin-danger" disabled={busy} onClick={() => onDelete(o.id)}>
+                    {busy ? '消しています…' : '削除する'}
+                  </button>
+                  <button type="button" className="btn" disabled={busy} onClick={() => setConfirmId(null)}>
+                    やめる
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn"
+                  aria-label={`${o.name}を削除`}
+                  onClick={() => setConfirmId(o.id)}
+                >
+                  削除
+                </button>
+              )}
+            </div>
             {openId === o.id && (
               <div className="admin-sub">
                 <p className="admin-mute">
