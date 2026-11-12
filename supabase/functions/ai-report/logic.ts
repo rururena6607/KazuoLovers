@@ -1,10 +1,10 @@
-// gemini-report の純粋な処理（T-30、F-13）。Deno にもブラウザにも依存しないので、Vitest で確かめる
-// （src/lib/data/geminiReportLogic.test.ts）。何も import しない（ダッシュボードからでも配れるように）。
+// ai-report の純粋な処理（T-30、F-13）。Deno にもブラウザにも依存しないので、Vitest で確かめる
+// （src/lib/data/aiReport.test.ts）。何も import しない（ダッシュボードからでも配れるように）。
 
 /** 範囲（scope）の長さの上限。例：match:<試合の id>、set:<セットの id>、all */
 export const MAX_SCOPE_LENGTH = 200
 
-/** 送ってよい集計の大きさの上限（文字数）。大きすぎると Gemini の無料枠を使い切る */
+/** 送ってよい集計の大きさの上限（文字数）。大きすぎると Claude API の料金がかさむ */
 export const MAX_SUMMARY_LENGTH = 30_000
 
 /** 本数がこれより少ない項目は参考値。集計の JSON に minSample がなければ使う（contracts の MIN_SAMPLE と同じ値） */
@@ -111,23 +111,19 @@ export function buildPrompt(summary: Record<string, unknown>): { system: string;
   return { system, user }
 }
 
-/** Gemini の generateContent に送る本文 */
-export function geminiRequestBody(summary: Record<string, unknown>) {
-  const { system, user } = buildPrompt(summary)
-  return {
-    systemInstruction: { parts: [{ text: system }] },
-    contents: [{ role: 'user', parts: [{ text: user }] }],
-    generationConfig: { temperature: 0.4 },
-  }
-}
+/** 使うモデル（要件定義書 8 章）。替えるときは Edge Functions のシークレット CLAUDE_MODEL で替える */
+export const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5-5'
 
-/** Gemini の応答からコメントの文字列を取り出す。取り出せなければ null */
-export function commentFromGemini(response: unknown): string | null {
-  if (!isRecord(response) || !Array.isArray(response.candidates)) return null
-  const first: unknown = response.candidates[0]
-  if (!isRecord(first) || !isRecord(first.content) || !Array.isArray(first.content.parts)) return null
-  const text = first.content.parts
-    .map((p: unknown) => (isRecord(p) && typeof p.text === 'string' ? p.text : ''))
+/**
+ * Claude API（Messages API）の応答の content と stop_reason から、コメントの文字列を取り出す。
+ * text のブロックだけをつなぐ（thinking や、断ったときに入る fallback のブロックは使わない）。
+ * 断られた（refusal）・途中で切れた（max_tokens）・空なら null
+ */
+export function commentFromClaude(response: unknown): string | null {
+  if (!isRecord(response) || !Array.isArray(response.content)) return null
+  if (response.stop_reason !== 'end_turn') return null
+  const text = response.content
+    .map((b: unknown) => (isRecord(b) && b.type === 'text' && typeof b.text === 'string' ? b.text : ''))
     .join('')
     .trim()
   return text === '' ? null : text

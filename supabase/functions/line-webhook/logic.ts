@@ -77,7 +77,7 @@ export interface ResultInput {
   opponentName: string | null
   tournament: string | null
   sets: readonly SetScore[]
-  /** その試合の保存済みの AI コメント。なければ null（Gemini は待たない） */
+  /** その試合の保存済みの AI コメント。なければ null（Claude API は待たない） */
   aiComment: string | null
 }
 
