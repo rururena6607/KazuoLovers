@@ -91,7 +91,7 @@ SMTP を保存すると、「Authentication → Emails → Templates」の件名
 
 ## LINE の返信（T-33、line-webhook）
 
-部の LINE グループで「結果」「7番」「ヘルプ」と送ると、Bot が返信する Edge Function。コードは `functions/line-webhook/`（`index.ts` と `logic.ts`）。返信（Reply）なので、月 200 通の無料枠を使わない。
+部の LINE グループで **Bot をメンションして**「結果」「7番」「ヘルプ」と送ると（例：`@Bot 結果`）、Bot が返信する Edge Function。メンションしていない会話には反応しない。メンションしたのに読めない文には、使い方を返す。コードは `functions/line-webhook/`（`index.ts` と `logic.ts`）。返信（Reply）なので、月 200 通の無料枠を使わない。
 
 - 署名（`x-line-signature`）を確かめ、LINE からのリクエストだけを受け付ける
 - Bot をグループに招待すると、そのグループを `LINE_TEAM_ID` のチームにつなぐ（`teams.line_group_id`）。**つなげるのは最初の1グループだけ**で、ほかのグループに招待されてもチームのデータは返さない。つなぎ直すときは Table Editor で `teams.line_group_id` を空にしてから招待し直す
@@ -128,7 +128,7 @@ npx supabase functions deploy line-webhook --project-ref （プロジェクト�
 1. 「Messaging API設定」の **Webhook URL** に `https://（プロジェクトの ID）.supabase.co/functions/v1/line-webhook` を入れる
 2. 「検証」を押して「成功」と出ることを確かめ、**Webhook の利用**をオンにする
 3. 部のテスト用のグループに Bot を招待する →「このグループをチームにつなぎました」と返ってくる
-4. 「結果」と送る → 最新の試合の得点が返ってくる（完了条件）。返ってこなければ「Edge Functions → line-webhook → Logs」を見る
+4. Bot をメンションして「結果」と送る（`@Bot 結果`）→ 最新の試合の得点が返ってくる（完了条件）。返ってこなければ「Edge Functions → line-webhook → Logs」を見る
 
 ## 公式戦後の自動投稿（T-35、line-push）
 
