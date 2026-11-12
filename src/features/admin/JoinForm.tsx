@@ -24,6 +24,8 @@ export function JoinForm({ data, onJoined, initialCode, onCancel }: Props) {
   const [code, setCode] = useState(initialCode ?? '')
   const [preview, setPreview] = useState<JoinPreview | null>(null)
   const [step, setStep] = useState<Step>('input')
+  /** 招待リンクで開いた直後の確認中（入力欄を見せない） */
+  const [checking, setChecking] = useState(Boolean(initialCode))
   const { busy, error, run, clearError } = useAction()
 
   const reset = () => {
@@ -39,8 +41,10 @@ export function JoinForm({ data, onJoined, initialCode, onCancel }: Props) {
     void run(async () => {
       setPreview(await data.previewJoin(initialCode))
       setStep('confirm')
-    })
+    }).finally(() => setChecking(false))
   }, [data, initialCode, run])
+
+  if (checking) return <p className="admin-mute">招待を確かめています…</p>
 
   const onCheck = (e: FormEvent) => {
     e.preventDefault()
