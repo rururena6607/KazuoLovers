@@ -93,6 +93,26 @@ export function JoinForm({ data, onJoined, initialCode, onCancel }: Props) {
 
   const deleting = preview.deleting.length > 0
 
+  // 自分がただ一人の管理者で、ほかに部員がいるチームからは移れない（サーバーでも止める）
+  if (preview.blocked.length > 0) {
+    return (
+      <div className="admin-form">
+        <p className="admin-error" role="alert">
+          あなたは{names(preview.blocked)}のただ一人の管理者で、ほかに部員がいるので、「{preview.teamName}」には移れません。
+          移ると{names(preview.blocked)}と、その選手・試合・記録がすべて消え、ほかの部員もチームを失います。
+        </p>
+        <p className="admin-mute">
+          先にほかの人を管理者にしてください（いまは、Supabase の Table Editor で team_members の role を admin に変えます）。
+        </p>
+        <div className="admin-inline">
+          <button type="button" className="btn" onClick={reset}>
+            やめる
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="admin-form">
       <p>「{preview.teamName}」に部員として参加します。</p>

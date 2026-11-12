@@ -1,5 +1,5 @@
 -- T-43 の確認：招待コードの発行・参加と、参加で前のチームから抜ける・消える動き
--- 20261112000000_invite_code.sql と 20261112010000_invite_code_fix.sql を流したあとに、Supabase の SQL Editor に貼って実行する。
+-- 20261112000000_invite_code.sql・20261112010000_invite_code_fix.sql・20261112020000_invite_code_block.sql を流したあとに、Supabase の SQL Editor に貼って実行する。
 -- 最後に rollback するので、データは残らない。成功すると「T-43 OK」と表示される。
 
 begin;
@@ -141,13 +141,37 @@ begin
   end if;
 end $$;
 
--- 管理者が自分だけの a：チームB に移ると、チームA が消える。allow_delete なしでは止まる
+-- 管理者が自分だけの a：チームA には部員 c がいるので、移れない（allow_delete でも止まる）
 select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
 do $$
 declare p jsonb;
 begin
   p := public.preview_join(current_setting('t43.code_b'));
-  if p->'leaving' <> '[]'::jsonb or p->'deleting' <> '["チームA"]'::jsonb then
+  if p->'blocked' <> '["チームA"]'::jsonb then
+    raise exception '確認13a 失敗：ほかに部員がいるのに、移れないと出ない（%）', p;
+  end if;
+  begin
+    perform public.join_team(current_setting('t43.code_b'), true);
+    raise exception '確認13b 失敗：ほかに部員がいるチームを消して移れてしまった';
+  exception when raise_exception then
+    if sqlerrm like '確認13b%' then raise; end if;
+  end;
+  if not exists (select 1 from public.teams where id = '10000000-0000-0000-0000-00000000000a') then
+    raise exception '確認13b 失敗：チームA が消えた';
+  end if;
+end $$;
+
+-- 部員 c：チームB に戻る（チームA から抜ける）。これで チームA の部員は a だけになる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000c","role":"authenticated"}', true);
+select public.join_team(current_setting('t43.code_b'));
+
+-- a：今度はチームB に移れる。チームA は消える。allow_delete なしでは止まる
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-00000000000a","role":"authenticated"}', true);
+do $$
+declare p jsonb;
+begin
+  p := public.preview_join(current_setting('t43.code_b'));
+  if p->'leaving' <> '[]'::jsonb or p->'deleting' <> '["チームA"]'::jsonb or p->'blocked' <> '[]'::jsonb then
     raise exception '確認13 失敗：消えるチームの表示が違う（%）', p;
   end if;
   begin
@@ -166,7 +190,7 @@ declare p jsonb; code_b text;
 begin
   code_b := current_setting('t43.code_b');
   p := public.preview_join(code_b);
-  if p->'leaving' <> '["チームC"]'::jsonb or p->'deleting' <> '[]'::jsonb then
+  if p->'leaving' <> '["チームC"]'::jsonb or p->'deleting' <> '[]'::jsonb or p->'blocked' <> '[]'::jsonb then
     raise exception '確認15 失敗：管理者がほかにいるのに消えると出た（%）', p;
   end if;
   perform public.join_team(code_b);
@@ -185,15 +209,17 @@ begin
      or exists (select 1 from public.serves where set_id = '40000000-0000-0000-0000-00000000000a') then
     raise exception '確認16 失敗：チームA の試合・記録が残っている';
   end if;
-  if exists (select 1 from public.team_members where user_id = '00000000-0000-0000-0000-00000000000c') then
-    raise exception '確認17 失敗：消えたチームの部員 c の所属が残っている';
+  if (select count(*) from public.team_members where user_id = '00000000-0000-0000-0000-00000000000c') <> 1
+     or not exists (select 1 from public.team_members where user_id = '00000000-0000-0000-0000-00000000000c'
+                    and team_id = '10000000-0000-0000-0000-00000000000b') then
+    raise exception '確認17 失敗：部員 c がチームB だけに入っていない';
   end if;
   if not exists (select 1 from public.team_members where team_id = '10000000-0000-0000-0000-00000000000c'
                  and user_id = '00000000-0000-0000-0000-0000000000e1' and role = 'admin') then
     raise exception '確認18 失敗：チームC と管理者 x が残っていない';
   end if;
-  if (select count(*) from public.team_members where team_id = '10000000-0000-0000-0000-00000000000b') <> 4 then
-    raise exception '確認19 失敗：チームB の人数が違う（b・d・a・y の4人のはず）';
+  if (select count(*) from public.team_members where team_id = '10000000-0000-0000-0000-00000000000b') <> 5 then
+    raise exception '確認19 失敗：チームB の人数が違う（b・d・c・a・y の5人のはず）';
   end if;
 end $$;
 

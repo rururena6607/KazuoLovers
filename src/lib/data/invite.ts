@@ -14,6 +14,11 @@ export interface JoinPreview {
   leaving: string[]
   /** 抜けると消えるチーム（自分のほかに管理者がいない）。選手・試合・記録もいっしょに消える */
   deleting: string[]
+  /**
+   * 移れない理由になるチーム：自分がただ一人の管理者で、ほかに部員がいる。
+   * 先にほかの人を管理者にしてから移る（消すと、ほかの部員も記録も失うため）
+   */
+  blocked: string[]
 }
 
 /** 管理画面に出す招待コード。管理者でなければ isAdmin が false で、code は null */
@@ -44,10 +49,16 @@ const broken = (): never => {
 }
 
 export function joinPreviewFromRow(v: unknown): JoinPreview {
-  if (!isRecord(v) || typeof v.team_name !== 'string' || !isStringArray(v.leaving) || !isStringArray(v.deleting)) {
+  if (
+    !isRecord(v) ||
+    typeof v.team_name !== 'string' ||
+    !isStringArray(v.leaving) ||
+    !isStringArray(v.deleting) ||
+    !isStringArray(v.blocked)
+  ) {
     return broken()
   }
-  return { teamName: v.team_name, leaving: v.leaving, deleting: v.deleting }
+  return { teamName: v.team_name, leaving: v.leaving, deleting: v.deleting, blocked: v.blocked }
 }
 
 export function inviteInfoFromRow(v: unknown): InviteInfo {

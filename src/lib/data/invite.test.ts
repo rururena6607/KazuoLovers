@@ -46,12 +46,16 @@ describe('checkInviteCode', () => {
 
 describe('サーバーの返事の読み方', () => {
   it('参加前の確認', () => {
-    expect(joinPreviewFromRow({ team_name: 'B', leaving: ['A'], deleting: [] })).toEqual({
+    expect(joinPreviewFromRow({ team_name: 'B', leaving: ['A'], deleting: [], blocked: [] })).toEqual({
       teamName: 'B',
       leaving: ['A'],
       deleting: [],
+      blocked: [],
     })
-    expect(() => joinPreviewFromRow({ team_name: 'B', leaving: null, deleting: [] })).toThrow()
+    expect(joinPreviewFromRow({ team_name: 'B', leaving: [], deleting: ['A'], blocked: ['A'] }).blocked).toEqual(['A'])
+    expect(() => joinPreviewFromRow({ team_name: 'B', leaving: null, deleting: [], blocked: [] })).toThrow()
+    // サーバーが古い（blocked を返さない）ときは、読めないとして止める（移れないチームを見落とさない）
+    expect(() => joinPreviewFromRow({ team_name: 'B', leaving: [], deleting: [] })).toThrow()
     expect(() => joinPreviewFromRow(null)).toThrow()
   })
 
@@ -83,10 +87,15 @@ describe('teamData の招待コード', () => {
   it('参加の確認と参加には、整えたコードを送る。消してよいかも送る', async () => {
     const { calls, data } = fakeRpc((fn) =>
       fn === 'preview_join'
-        ? { data: { team_name: 'B', leaving: [], deleting: ['A'] }, error: null }
+        ? { data: { team_name: 'B', leaving: [], deleting: ['A'], blocked: [] }, error: null }
         : { data: { id: 't1', name: 'B' }, error: null },
     )
-    await expect(data.previewJoin('abcd-2345')).resolves.toEqual({ teamName: 'B', leaving: [], deleting: ['A'] })
+    await expect(data.previewJoin('abcd-2345')).resolves.toEqual({
+      teamName: 'B',
+      leaving: [],
+      deleting: ['A'],
+      blocked: [],
+    })
     await expect(data.joinTeam('abcd 2345', true)).resolves.toEqual({ id: 't1', name: 'B' })
     expect(calls).toEqual([
       { fn: 'preview_join', args: { code: 'ABCD2345' } },
