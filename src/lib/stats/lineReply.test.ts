@@ -138,6 +138,21 @@ describe('formatMatchResult（「結果」）', () => {
     expect(long).toHaveLength(LINE_MAX_TEXT_LENGTH)
     expect(long.endsWith('…')).toBe(true)
   })
+
+  it('絵文字（2単位の文字）を途中で切らない', () => {
+    // 見出し「AI のコメント\n」は 9 単位。あ 4989 個で 4998 単位、その次（4998 単位目）が絵文字の上位サロゲート。
+    // 4999 単位で切ると絵文字が半分残るので、絵文字ごと落として「あ」の後ろに「…」→ 4998 + 1 = 4999 単位
+    const comment = 'あ'.repeat(4989) + '😀'.repeat(10)
+    const text = formatMatchResult({ ...input, aiComment: comment })[1] ?? ''
+    expect(text).toHaveLength(4999)
+    expect(text.endsWith('あ…')).toBe(true)
+  })
+
+  it('相手チーム名に「*」があっても、参考値がなければ注を出さない', () => {
+    // 打数 61・受数 64・打数 110 で、どれも 10 本以上
+    const [r] = formatMatchResult({ ...input, opponentName: 'A*高校' })
+    expect(r).not.toContain('参考値')
+  })
 })
 
 describe('formatPlayerReport（「7番」）', () => {

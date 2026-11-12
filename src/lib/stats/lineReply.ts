@@ -5,7 +5,8 @@
 // 数値の表示は 6 章「数値の表示」に合わせる：小数第1位の %、マイナスは「−」、10 本未満の参考値には「*」、本数 0 は「−」。
 // 返信には選手の名前を出さず、背番号だけにする（T-33 の決め方）。
 // 練習のサーブ（狙ったゾーンがある）は受けた評価がなく、サーブ効果率が低く出るので、ここで除く（T-31 と同じ）。
-// supabase/functions/line-webhook は、この関数を import して返信を作る（依存の向き：functions → lib/stats → contracts）。
+// supabase/functions/line-webhook から使う予定。ただし今の line-webhook は「何も import しない」作りなので、
+// つなぎ方（src/ からの import を認めるか、写すか）は T-33（ひろし）と未決。
 import {
   MIN_SAMPLE,
   type AttackRecord,
@@ -24,8 +25,14 @@ export const LINE_MAX_TEXT_LENGTH = 5000
 /** 率がないとき（本数 0）の表示 */
 const NO_VALUE = '−'
 
-const cut = (s: string): string =>
-  s.length <= LINE_MAX_TEXT_LENGTH ? s : `${s.slice(0, LINE_MAX_TEXT_LENGTH - 1)}…`
+/** 上限を超えたら末尾を「…」にする。絵文字など2単位の文字（サロゲートペア）を途中で切らない */
+function cut(s: string): string {
+  if (s.length <= LINE_MAX_TEXT_LENGTH) return s
+  let end = LINE_MAX_TEXT_LENGTH - 1
+  const last = s.charCodeAt(end - 1)
+  if (last >= 0xd800 && last <= 0xdbff) end-- // 上位サロゲートで終わるなら、その文字ごと落とす
+  return `${s.slice(0, end)}…`
+}
 
 /** 小数第1位の %。マイナスは「−」（U+2212）。丸めて 0.0 になる負の値には付けない */
 function percentText(value: number | null): string {
@@ -34,17 +41,23 @@ function percentText(value: number | null): string {
   return value < 0 && text !== '0.0' ? `−${text}%` : `${text}%`
 }
 
-/** 率の表示。本数が MIN_SAMPLE 本未満の値には「*」を付ける（本数 0 の「−」には付けない） */
+/** 参考値か：本数が 1 本以上 MIN_SAMPLE 本未満（本数 0 は値がなく「−」なので参考値ではない） */
+const isReference = (count: number): boolean => count > 0 && count < MIN_SAMPLE
+
+/** 率の表示。参考値には「*」を付ける */
 function rateText(value: number | null, count: number): string {
   const text = percentText(value)
-  return value !== null && count < MIN_SAMPLE ? `${text}*` : text
+  return value !== null && isReference(count) ? `${text}*` : text
 }
 
 const REFERENCE_NOTE = `* は ${MIN_SAMPLE} 本未満の参考値です。`
 
-/** 参考値の「*」が文面に出ていれば、末尾に注を足す */
-const withNote = (lines: readonly string[]): string =>
-  lines.some((l) => l.includes('*')) ? [...lines, '', REFERENCE_NOTE].join('\n') : lines.join('\n')
+/**
+ * 出した率の本数に参考値があれば、末尾に注を足す。
+ * 文面の「*」で決めない（相手チーム名や大会名に「*」があると、参考値がなくても注が出てしまうため）
+ */
+const withNote = (lines: readonly string[], shownCounts: readonly number[]): string =>
+  shownCounts.some(isReference) ? [...lines, '', REFERENCE_NOTE].join('\n') : lines.join('\n')
 
 /** 練習のサーブ（狙ったゾーンがある）を除く */
 const matchServes = (serves: readonly ServeRecord[]): ServeRecord[] =>
@@ -100,7 +113,9 @@ export function formatMatchResult(r: LineResultInput): string[] {
   const head = [title, r.sets.length > 0 ? `セット ${won}-${lost}` : null, scores].filter(
     (l): l is string => l !== null,
   )
-  const messages = [withNote([...head, '', ...metrics])]
+  const messages = [
+    withNote([...head, '', ...metrics], [serve.attempts, reception.receptions, attack.attempts]),
+  ]
   messages.push(
     r.aiComment
       ? `AI のコメント\n${r.aiComment}`
@@ -142,5 +157,5 @@ export function formatPlayerReport(p: LinePlayerInput): string {
       ? 'アタック 記録なし'
       : `アタック 打数${attack.attempts} アタック決定率${rateText(attack.killRate, attack.attempts)}`,
   ]
-  return cut(withNote(lines))
+  return cut(withNote(lines, [serve.attempts, reception.receptions, attack.attempts]))
 }
