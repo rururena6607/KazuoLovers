@@ -292,7 +292,7 @@ export const overallMetrics = (tab: Tab, sets: readonly SetRecords[]): Metric[] 
 export const playerLabel = (p: Player | undefined): string => (p ? `${p.number} ${p.name}` : '?')
 
 /** 背番号順に並べる比較関数。名簿にない選手は最後 */
-const byNumber = (players: readonly Player[]) => {
+export const byNumber = (players: readonly Player[]) => {
   const number = new Map(players.map((p) => [p.id, p.number]))
   return (a: string, b: string): number => (number.get(a) ?? Infinity) - (number.get(b) ?? Infinity)
 }
