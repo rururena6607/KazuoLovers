@@ -130,6 +130,8 @@ SMTP を保存すると、「Authentication → Emails → Templates」の件名
 
 LINE は Supabase のログインを持たないので、**JWT の確かめをオフにして**配る（代わりに署名で確かめる）。
 
+`line-webhook` と `line-push` は、返信の文（`src/lib/stats/lineReply.ts`）と行の変換（`src/lib/data/recordRows.ts`）を `src/` から読む（T-34）。そのため、ダッシュボードのエディタからは配れない。**リポジトリのいちばん上のフォルダで**、下のコマンドで配る。
+
 ```
 npx supabase functions deploy line-webhook --project-ref （プロジェクトの ID） --use-api --no-verify-jwt
 ```

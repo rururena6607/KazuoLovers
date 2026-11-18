@@ -2,9 +2,12 @@
 // - ログインした部員が、記録画面から試合を終えたときに呼ぶ（src/lib/data/linePush.ts）
 // - 公式戦（大会名のある試合）だけ。同じ試合は1回しか送らない（matches.line_pushed_at）
 // - 送る前に今月の残りの通数とグループの人数を確かめ、足りなければ送らない
+// - 文は「結果」の返信と同じ（src/lib/stats/lineReply.ts の formatMatchResult、T-34）。src/ を import するので CLI で配る
 // シークレットは line-webhook と同じ（LINE_CHANNEL_ACCESS_TOKEN・LINE_TEAM_ID）。
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { formatResult, setScoreFromPoints } from '../line-webhook/logic.ts'
+import { formatMatchResult } from '../../../src/lib/stats/lineReply.ts'
+import { setResultsFromRows } from '../line-webhook/logic.ts'
+import { fetchRecordRows } from '../line-webhook/records.ts'
 import { PUSH_HEADER, checkQuota, isOfficialMatch, quotaMessage } from './logic.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -44,7 +47,7 @@ async function pushResult(
 ): Promise<void> {
   const { data: sets } = await admin.from('sets').select('id,set_no').eq('match_id', match.id).order('set_no')
   const setIds = (sets ?? []).map((s: { id: string }) => s.id)
-  const [{ data: opponent }, { data: points }, { data: report }] = await Promise.all([
+  const [{ data: opponent }, { data: points }, { data: report }, rows] = await Promise.all([
     match.opponent_id
       ? admin.from('opponents').select('name').eq('id', match.opponent_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -57,22 +60,16 @@ async function pushResult(
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    fetchRecordRows(admin, setIds),
   ])
-  const [summary, ...rest] = formatResult({
+  const [summary, ...rest] = formatMatchResult({
     date: match.date,
     opponentName: opponent?.name ?? null,
     tournament: match.tournament,
-    sets: (sets ?? [])
-      .map((s: { id: string; set_no: number }) =>
-        setScoreFromPoints(
-          s.set_no,
-          (points ?? []).filter((p: { set_id: string }) => p.set_id === s.id),
-        ),
-      )
-      .filter((s) => s.ourScore + s.oppScore > 0),
+    sets: setResultsFromRows(sets ?? [], points ?? [], rows),
     aiComment: report?.comment ?? null,
   })
-  // AI のコメントがまだなければ、得点だけを送る（吹き出しの数は通数に関係しない）
+  // AI のコメントがまだなければ、得点と指標だけを送る（吹き出しの数は通数に関係しない）
   const texts = [`${PUSH_HEADER}\n${summary}`, ...(report ? rest : [])]
 
   const res = await fetch('https://api.line.me/v2/bot/message/push', {

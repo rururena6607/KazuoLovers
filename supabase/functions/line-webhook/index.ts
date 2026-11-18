@@ -3,19 +3,21 @@
 // - Bot をグループに招待したとき（join）、そのグループを LINE_TEAM_ID のチームにつなぐ。
 //   つなげるのは最初の1グループだけ（ほかのグループに招待されても、チームのデータは返さない）
 // - つないだグループで「結果」「7番」「ヘルプ」と送られたら返信する（Reply なので通数を使わない）
+// - 返信の文は src/lib/stats/lineReply.ts（T-34）で作る。src/ を import するので CLI で配る（supabase/README.md）
 // LINE は Supabase のログインを持たないので、JWT の確かめをオフにして配る（supabase/README.md）。
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { formatMatchResult, formatPlayerReport } from '../../../src/lib/stats/lineReply.ts'
 import {
   HELP_TEXT,
-  formatPlayerCounts,
-  formatResult,
   parseCommand,
   parseEvents,
-  setScoreFromPoints,
+  playerInputFromRows,
+  setResultsFromRows,
   textForBot,
   verifySignature,
   type LineEvent,
 } from './logic.ts'
+import { fetchRecordRows } from './records.ts'
 
 const CHANNEL_SECRET = Deno.env.get('LINE_CHANNEL_SECRET') ?? ''
 const ACCESS_TOKEN = Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') ?? ''
@@ -56,7 +58,7 @@ async function resultTexts(): Promise<string[]> {
   const latest = await latestMatch()
   if (!latest) return ['まだ試合の記録がありません。']
   const { match, sets } = latest
-  const [{ data: opponent }, { data: points }, { data: report }] = await Promise.all([
+  const [{ data: opponent }, { data: points }, { data: report }, rows] = await Promise.all([
     match.opponent_id
       ? db.from('opponents').select('name').eq('id', match.opponent_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -73,14 +75,16 @@ async function resultTexts(): Promise<string[]> {
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    fetchRecordRows(
+      db,
+      sets.map((s) => s.id),
+    ),
   ])
-  return formatResult({
+  return formatMatchResult({
     date: match.date,
     opponentName: opponent?.name ?? null,
     tournament: match.tournament,
-    sets: sets
-      .map((s) => setScoreFromPoints(s.set_no, (points ?? []).filter((p) => p.set_id === s.id)))
-      .filter((s) => s.ourScore + s.oppScore > 0),
+    sets: setResultsFromRows(sets, points ?? [], rows),
     aiComment: report?.comment ?? null,
   })
 }
@@ -97,21 +101,11 @@ async function playerTexts(number: number): Promise<string[]> {
   if (!player) return [`#${number} の選手は登録されていません。`]
   const latest = await latestMatch()
   if (!latest) return ['まだ試合の記録がありません。']
-  const setIds = latest.sets.map((s) => s.id)
-  const count = async (table: string, column: string) => {
-    const { count: n } = await db
-      .from(table)
-      .select('id', { count: 'exact', head: true })
-      .eq(column, player.id)
-      .in('set_id', setIds)
-    return n ?? 0
-  }
-  const [serves, receptions, attacks] = await Promise.all([
-    count('serves', 'server_id'),
-    count('receptions', 'receiver_id'),
-    count('attacks', 'attacker_id'),
-  ])
-  return [formatPlayerCounts({ number, date: latest.match.date, serves, receptions, attacks })]
+  const rows = await fetchRecordRows(
+    db,
+    latest.sets.map((s) => s.id),
+  )
+  return [formatPlayerReport(playerInputFromRows(number, player.id, latest.match.date, rows))]
 }
 
 /** join：まだどのグループにもつながっていなければ、このグループをつなぐ */

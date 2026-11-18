@@ -1,9 +1,16 @@
-// line-webhook の純粋な処理（T-33、F-15）。Web 標準（crypto.subtle）だけを使うので、Vitest で確かめる
-// （src/lib/data/lineWebhookLogic.test.ts）。何も import しない（ダッシュボードからでも配れるように）。
-// 返信の文（選手の指標など）は T-34（とりはる）で作り直す。ここでは指標の式を使わない。
-
-/** LINE のテキストの吹き出し1つの上限 */
-export const MAX_TEXT_LENGTH = 5000
+// line-webhook の純粋な処理（T-33、T-34、F-15）。Vitest で確かめる（src/lib/data/lineWebhook.test.ts）。
+// 返信の文は src/lib/stats/lineReply.ts（T-34）で作る。ここでは、テーブルの行をその入力に直すだけで、指標の式は持たない。
+// 行から記録への変換は src/lib/data/recordRows.ts を使う。src/ を import するので、ダッシュボードからは配れない。
+// CLI（npx supabase functions deploy … --use-api）で配る（supabase/README.md）。
+import type { LinePlayerInput, LineSetResult } from '../../../src/lib/stats/lineReply.ts'
+import {
+  attackFromRow,
+  receptionFromRow,
+  serveFromRow,
+  type AttackRow,
+  type ReceptionRow,
+  type ServeRow,
+} from '../../../src/lib/data/recordRows.ts'
 
 /**
  * x-line-signature を確かめる。本文を channel secret で HMAC-SHA256 にし、Base64 にしたものと同じなら正しい。
@@ -73,44 +80,51 @@ export function setScoreFromPoints(
   return { setNo, ourScore: last?.our_score ?? 0, oppScore: last?.opp_score ?? 0 }
 }
 
-export interface ResultInput {
-  date: string
-  opponentName: string | null
-  tournament: string | null
-  sets: readonly SetScore[]
-  /** その試合の保存済みの AI コメント。なければ null（Claude API は待たない） */
-  aiComment: string | null
+/** 1つの試合の記録の行（serves・receptions・attacks。列は recordRows.ts の COLUMNS） */
+export interface RecordRows {
+  serves: readonly ServeRow[]
+  receptions: readonly ReceptionRow[]
+  attacks: readonly AttackRow[]
 }
 
-const cut = (s: string) => (s.length <= MAX_TEXT_LENGTH ? s : `${s.slice(0, MAX_TEXT_LENGTH - 1)}…`)
-
-/** 「結果」の返信。吹き出しは試合の得点と AI コメントの2つ */
-export function formatResult(r: ResultInput): string[] {
-  const title = [r.date, r.opponentName ? `vs ${r.opponentName}` : '練習', r.tournament].filter(Boolean).join(' ')
-  const won = r.sets.filter((s) => s.ourScore > s.oppScore).length
-  const lost = r.sets.filter((s) => s.ourScore < s.oppScore).length
-  const scores = r.sets.length === 0 ? 'まだ得点の記録がありません' : r.sets.map((s) => `${s.ourScore}-${s.oppScore}`).join(' / ')
-  const lines = [title, r.sets.length > 0 ? `セット ${won}-${lost}` : null, scores].filter(Boolean)
-  const messages = [lines.join('\n')]
-  messages.push(r.aiComment ? `AI のコメント\n${r.aiComment}` : 'AI のコメントはまだありません。アプリの分析画面で作れます。')
-  return messages.map(cut)
+/**
+ * セットの行・得点の行・記録の行から、「結果」の返信（formatMatchResult）のセットを作る。
+ * 得点の記録がないセット（0-0）は出さない
+ */
+export function setResultsFromRows(
+  sets: readonly { id: string; set_no: number }[],
+  points: readonly { set_id: string; our_score: number; opp_score: number; recorded_at: string }[],
+  rows: RecordRows,
+): LineSetResult[] {
+  return sets
+    .map((s) => ({
+      ...setScoreFromPoints(
+        s.set_no,
+        points.filter((p) => p.set_id === s.id),
+      ),
+      records: {
+        serves: rows.serves.filter((r) => r.set_id === s.id).map(serveFromRow),
+        receptions: rows.receptions.filter((r) => r.set_id === s.id).map(receptionFromRow),
+        attacks: rows.attacks.filter((r) => r.set_id === s.id).map(attackFromRow),
+      },
+    }))
+    .filter((s) => s.ourScore + s.oppScore > 0)
 }
 
-export interface PlayerCountsInput {
-  number: number
-  date: string
-  serves: number
-  receptions: number
-  attacks: number
-}
-
-/** 「7番」の返信。指標は T-34 で足す。それまでは本数だけ返す */
-export function formatPlayerCounts(p: PlayerCountsInput): string {
-  return cut(
-    [`#${p.number}（${p.date} の試合）`, `サーブ ${p.serves}本`, `レシーブ ${p.receptions}本`, `アタック ${p.attacks}本`].join(
-      '\n',
-    ),
-  )
+/** 記録の行から、「7番」の返信（formatPlayerReport）の入力を作る。その選手が打った・受けた記録だけを使う */
+export function playerInputFromRows(
+  number: number,
+  playerId: string,
+  date: string,
+  rows: RecordRows,
+): LinePlayerInput {
+  return {
+    number,
+    date,
+    serves: rows.serves.filter((r) => r.server_id === playerId).map(serveFromRow),
+    receptions: rows.receptions.filter((r) => r.receiver_id === playerId).map(receptionFromRow),
+    attacks: rows.attacks.filter((r) => r.attacker_id === playerId).map(attackFromRow),
+  }
 }
 
 /** Webhook の本文のうち、ここで使うもの */
