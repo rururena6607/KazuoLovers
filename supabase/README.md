@@ -102,12 +102,12 @@ SMTP を保存すると、「Authentication → Emails → Templates」の件名
 
 ## LINE の返信（T-33、line-webhook）
 
-部の LINE グループで **Bot をメンションして**「結果」「7番」「ヘルプ」と送ると（例：`@Bot 結果`）、Bot が返信する Edge Function。メンションしていない会話には反応しない。メンションしたのに読めない文には、使い方を返す。コードは `functions/line-webhook/`（`index.ts` と `logic.ts`）。返信（Reply）なので、月 200 通の無料枠を使わない。
+部の LINE グループで **Bot をメンションして**「結果」「7番」「ヘルプ」と送ると（例：`@Bot 結果`）、Bot が返信する Edge Function。メンションしていない会話には反応しない。メンションしたのに読めない文には、使い方を返す。コードは `functions/line-webhook/`（`index.ts`・`logic.ts`・`records.ts`）。返信（Reply）なので、月 200 通の無料枠を使わない。
 
 - 署名（`x-line-signature`）を確かめ、LINE からのリクエストだけを受け付ける
 - Bot をグループに招待すると、そのグループを `LINE_TEAM_ID` のチームにつなぐ（`teams.line_group_id`）。**つなげるのは最初の1グループだけ**で、ほかのグループに招待されてもチームのデータは返さない。つなぎ直すときは Table Editor で `teams.line_group_id` を空にしてから招待し直す
-- 「結果」：最新の試合（練習は除く）のセットごとの得点と、保存済みの AI コメント（`match:<試合の id>`）。Claude API は待たない
-- 「7番」「#7」：その選手の最新の試合の本数。指標は T-34 で足す
+- 「結果」：最新の試合（練習は除く）のセットごとの得点とチームの主な指標と、保存済みの AI コメント（`match:<試合の id>`）。Claude API は待たない
+- 「7番」「#7」：その選手の最新の試合のサーブ（打数・サーブ効果率・ミス率）、レシーブ（受数・サーブレシーブ成功率）、アタック（打数・アタック決定率）。文は `src/lib/stats/lineReply.ts`（T-34）で作る
 
 ### 1. LINE のチャネルを作る
 
@@ -130,6 +130,8 @@ SMTP を保存すると、「Authentication → Emails → Templates」の件名
 
 LINE は Supabase のログインを持たないので、**JWT の確かめをオフにして**配る（代わりに署名で確かめる）。
 
+`line-webhook` と `line-push` は、返信の文（`src/lib/stats/lineReply.ts`）と行の変換（`src/lib/data/recordRows.ts`）を `src/` から読む（T-34）。そのため、ダッシュボードのエディタからは配れない。**リポジトリのいちばん上のフォルダで**、下のコマンドで配る。
+
 ```
 npx supabase functions deploy line-webhook --project-ref （プロジェクトの ID） --use-api --no-verify-jwt
 ```
@@ -143,7 +145,7 @@ npx supabase functions deploy line-webhook --project-ref （プロジェクト�
 
 ## 公式戦後の自動投稿（T-35、line-push）
 
-公式戦が終わったら、結果を部の LINE グループに送る（Push）Edge Function。記録画面で試合を終えたときに `linePush.pushMatchResult(matchId)`（`src/lib/data/linePush.ts`）で呼ぶ。コードは `functions/line-push/`（`line-webhook/logic.ts` も使う）。
+公式戦が終わったら、結果を部の LINE グループに送る（Push）Edge Function。記録画面で試合を終えたときに `linePush.pushMatchResult(matchId)`（`src/lib/data/linePush.ts`）で呼ぶ。コードは `functions/line-push/`（`line-webhook/logic.ts`・`records.ts` も使う）。
 
 - **公式戦**は、大会名のある試合とする。練習試合は大会名を空にして作る
 - 同じ試合は1回しか送らない（`matches.line_pushed_at`。`migrations/20261029010000_line_pushed_at.sql` を流しておく）

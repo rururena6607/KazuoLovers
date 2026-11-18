@@ -1,16 +1,18 @@
 // Edge Function line-webhook（supabase/functions）の純粋な処理のテスト。
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { formatMatchResult, formatPlayerReport } from '../stats/lineReply.ts'
 import {
-  MAX_TEXT_LENGTH,
-  formatPlayerCounts,
-  formatResult,
   parseCommand,
   parseEvents,
+  playerInputFromRows,
+  setResultsFromRows,
   setScoreFromPoints,
   textForBot,
   verifySignature,
+  type RecordRows,
 } from '../../../supabase/functions/line-webhook/logic.ts'
+import type { ReceptionRow, ServeRow } from './recordRows.ts'
 
 const SECRET = 'test-channel-secret'
 const body = JSON.stringify({ destination: 'U1', events: [{ type: 'message', replyToken: 'r1' }] })
@@ -66,38 +68,109 @@ describe('setScoreFromPoints', () => {
   })
 })
 
-describe('formatResult', () => {
-  it('日付・相手・大会、セットの取った数、セットごとの得点、AI コメントを返す', () => {
-    const texts = formatResult({
+// 要件定義書 5 章の計算例：10本打ってエース1・効果3（C＋D）・ミス2 → サーブ効果率 12.5%、
+// 10本受けて A5・B3 → サーブレシーブ成功率 65%
+const serveRow = (n: number, serverId: string, setId: string, result: ServeRow['result'], reception: ServeRow['reception']): ServeRow => ({
+  client_id: `s${n}`,
+  set_id: setId,
+  server_id: serverId,
+  serve_type: 'float',
+  from_x: null,
+  to_x: null,
+  to_y: null,
+  target_zone: null,
+  speed: null,
+  result,
+  miss_type: result === 'miss' ? 'net' : null,
+  reception,
+  receiver_id: null,
+  recorded_at: '2026-10-29T10:00:00+00:00',
+})
+const receptionRow = (n: number, receiverId: string, setId: string, result: ReceptionRow['result']): ReceptionRow => ({
+  client_id: `r${n}`,
+  set_id: setId,
+  receiver_id: receiverId,
+  opp_server_id: null,
+  opp_serve_type: null,
+  at_x: null,
+  at_y: null,
+  result,
+  recorded_at: '2026-10-29T10:00:00+00:00',
+})
+
+/** #7（p7）の記録：サーブ 10 本（エース1・C1・D2・A3・B1・ミス2）、レシーブ 10 本（A5・B3・C1・D1）。すべてセット s1 */
+const p7Serves: ServeRow[] = [
+  serveRow(1, 'p7', 's1', 'ace', null),
+  serveRow(2, 'p7', 's1', 'in', 'C'),
+  serveRow(3, 'p7', 's1', 'in', 'D'),
+  serveRow(4, 'p7', 's1', 'in', 'D'),
+  serveRow(5, 'p7', 's1', 'in', 'A'),
+  serveRow(6, 'p7', 's1', 'in', 'A'),
+  serveRow(7, 'p7', 's1', 'in', 'A'),
+  serveRow(8, 'p7', 's1', 'in', 'B'),
+  serveRow(9, 'p7', 's1', 'miss', null),
+  serveRow(10, 'p7', 's1', 'miss', null),
+]
+const p7Receptions: ReceptionRow[] = (['A', 'A', 'A', 'A', 'A', 'B', 'B', 'B', 'C', 'D'] as const).map((g, i) =>
+  receptionRow(i + 1, 'p7', 's1', g),
+)
+
+describe('setResultsFromRows（「結果」の入力）', () => {
+  const sets = [
+    { id: 's1', set_no: 1 },
+    { id: 's2', set_no: 2 },
+  ]
+  const points = [{ set_id: 's1', our_score: 25, opp_score: 22, recorded_at: '2026-10-29T10:30:00Z' }]
+  const rows: RecordRows = { serves: p7Serves, receptions: p7Receptions, attacks: [] }
+
+  it('記録をセットごとに分け、得点の記録がないセットは出さない', () => {
+    const result = setResultsFromRows(sets, points, rows)
+    expect(result.map((s) => [s.setNo, s.ourScore, s.oppScore])).toEqual([[1, 25, 22]])
+    expect(result[0]?.records.serves).toHaveLength(10)
+    expect(result[0]?.records.receptions).toHaveLength(10)
+  })
+
+  it('formatMatchResult に渡すと、セットの得点とチームの指標（5 章の計算例の値）が出る', () => {
+    const texts = formatMatchResult({
       date: '2026-10-29',
       opponentName: '熊本工業',
       tournament: '新人戦',
-      sets: [
-        { setNo: 1, ourScore: 25, oppScore: 22 },
-        { setNo: 2, ourScore: 19, oppScore: 25 },
-        { setNo: 3, ourScore: 25, oppScore: 17 },
-      ],
-      aiComment: '【良かった点】…',
+      sets: setResultsFromRows(sets, points, rows),
+      aiComment: null,
     })
-    expect(texts).toEqual([
-      '2026-10-29 vs 熊本工業 新人戦\nセット 2-1\n25-22 / 19-25 / 25-17',
-      'AI のコメント\n【良かった点】…',
-    ])
-  })
-
-  it('得点も AI コメントもまだなければ、そう伝える。長すぎる文は切る', () => {
-    const texts = formatResult({ date: '2026-10-29', opponentName: null, tournament: null, sets: [], aiComment: null })
-    expect(texts[0]).toBe('2026-10-29 練習\nまだ得点の記録がありません')
-    expect(texts[1]).toContain('まだありません')
-    const long = formatResult({ date: 'd', opponentName: null, tournament: null, sets: [], aiComment: 'あ'.repeat(6000) })
-    expect(long[1]?.length).toBe(MAX_TEXT_LENGTH)
+    expect(texts[0]).toBe(
+      [
+        '2026-10-29 vs 熊本工業 新人戦',
+        'セット 1-0',
+        '25-22',
+        '',
+        'サーブ 打数10 サーブ効果率12.5% エース率10.0% ミス率20.0%',
+        'レシーブ 受数10 サーブレシーブ成功率65.0% 被エース率0.0%',
+        'アタック 打数0 アタック決定率− 効果率− 失点0',
+      ].join('\n'),
+    )
   })
 })
 
-describe('formatPlayerCounts', () => {
-  it('背番号と本数を返す（指標は T-34）', () => {
-    expect(formatPlayerCounts({ number: 7, date: '2026-10-29', serves: 18, receptions: 9, attacks: 12 })).toBe(
-      '#7（2026-10-29 の試合）\nサーブ 18本\nレシーブ 9本\nアタック 12本',
+describe('playerInputFromRows（「7番」の入力）', () => {
+  // ほかの選手（p8）の記録は入れない
+  const rows: RecordRows = {
+    serves: [...p7Serves, serveRow(11, 'p8', 's1', 'ace', null)],
+    receptions: [...p7Receptions, receptionRow(11, 'p8', 's1', 'ace')],
+    attacks: [],
+  }
+
+  it('その選手の記録だけを使い、formatPlayerReport で 5 章の計算例の値になる', () => {
+    const input = playerInputFromRows(7, 'p7', '2026-10-29', rows)
+    expect(input.serves).toHaveLength(10)
+    expect(input.receptions).toHaveLength(10)
+    expect(formatPlayerReport(input)).toBe(
+      [
+        '#7（2026-10-29 の試合）',
+        'サーブ 打数10 サーブ効果率12.5% ミス率20.0%',
+        'レシーブ 受数10 サーブレシーブ成功率65.0%',
+        'アタック 記録なし',
+      ].join('\n'),
     )
   })
 })
