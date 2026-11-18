@@ -3,6 +3,7 @@
 import type { MatchRepository, RecordRepository } from '../contracts/index.ts'
 import { createDemoMatchSource } from '../features/record/matchSource.ts'
 import { DEMO_MATCH, DEMO_PRACTICE, DEMO_PRACTICE_SET, DEMO_SETS } from '../features/record/demo.ts'
+import { aiReports, type AiReports } from '../lib/data/aiReport.ts'
 import { auth, type Auth } from '../lib/data/auth.ts'
 import { createFakeRecordRepository } from '../lib/data/fakeRecordRepository.ts'
 import { recordRepository } from '../lib/data/supabaseRecordStore.ts'
@@ -18,6 +19,8 @@ export type Backend =
       loadTeam: LoadTeam
       teamData: TeamData
       auth: Auth
+      /** AI コメント（Edge Function の ai-report）。デモには無い */
+      aiReports: AiReports
     }
 
 const filled = (v: unknown): boolean => typeof v === 'string' && v !== ''
@@ -46,5 +49,6 @@ export const backend: Backend = hasSupabaseKeys(import.meta.env)
       loadTeam: loadTeamFrom(teamData),
       teamData,
       auth,
+      aiReports,
     }
   : createDemoBackend()
